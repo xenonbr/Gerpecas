@@ -898,7 +898,8 @@
         <div class="filter-group">
           <span class="filter-label">Ordenar:</span>
           <select id="sort-select" class="select-custom">
-            <option value="RELEVANCE">Padrão do Catálogo</option>
+            <option value="RELEVANCE">Padrão (Novidades no Topo)</option>
+            <option value="NEWEST">Mais Recentes Primeiro</option>
             <option value="PRICE_ASC">Menor Preço</option>
             <option value="PRICE_DESC">Maior Preço</option>
             <option value="CODE_ASC">Código (A-Z)</option>
@@ -1512,7 +1513,7 @@
 
           if (data && data.length > 0) {
             // Dados obtidos com sucesso do banco de dados na nuvem!
-            productsList = data.map(r => ({
+            const mapped = data.map(r => ({
               id: Number(r.id),
               cat: r.cat || 'Outras Peças',
               code: r.code || '',
@@ -1523,6 +1524,16 @@
               obs: r.obs || '',
               img: r.img || ''
             }));
+            // Peças novas cadastradas aparecem primeiro no topo
+            mapped.sort((a, b) => {
+              const aNew = a.id > 978;
+              const bNew = b.id > 978;
+              if (aNew && !bNew) return -1;
+              if (!aNew && bNew) return 1;
+              if (aNew && bNew) return b.id - a.id;
+              return a.id - b.id;
+            });
+            productsList = mapped;
 
             // Salva em cache IndexedDB
             await idbSaveCatalog(productsList);
@@ -1740,8 +1751,18 @@
         filtered.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
       } else if (state.sort === 'DESC_ASC') {
         filtered.sort((a, b) => (a.desc || '').localeCompare(b.desc || ''));
+      } else if (state.sort === 'NEWEST') {
+        filtered.sort((a, b) => b.id - a.id);
       } else {
-        filtered.sort((a, b) => a.id - b.id);
+        // Padrão do Catálogo: Peças novas cadastradas (id > 978) aparecem no topo da Página 1!
+        filtered.sort((a, b) => {
+          const aNew = a.id > 978;
+          const bNew = b.id > 978;
+          if (aNew && !bNew) return -1;
+          if (!aNew && bNew) return 1;
+          if (aNew && bNew) return b.id - a.id;
+          return a.id - b.id;
+        });
       }
 
       return filtered;
