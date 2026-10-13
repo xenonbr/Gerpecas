@@ -1499,65 +1499,112 @@
     }
 
     // 2. Conecta assincronamente ao Supabase ou IndexedDB
-    async function loadCloudDatabase() {
-      const client = initSupabaseClient();
-      if (client) {
-        updateDbStatusUI('connected', 'Conectando...');
-        try {
-          const { data, error } = await client
-            .from('products')
-            .select('*')
-            .order('id', { ascending: true });
+    // --- COMUNICAÇÃO DIRETA NATIVA COM O SUPABASE (REST API NATIVA + SDK) ---
+    async function fetchProductsFromCloud() {
+      const { url, key } = getSupabaseConfig();
+      if (!url || !key) return null;
 
-          if (error) throw error;
-
-          if (data && data.length > 0) {
-            // Dados obtidos com sucesso do banco de dados na nuvem!
-            const mapped = data.map(r => ({
-              id: Number(r.id),
-              cat: r.cat || 'Outras Peças',
-              code: r.code || '',
-              desc: r.desc || '',
-              app: r.app || '',
-              price: (r.price !== null && r.price !== undefined) ? parseFloat(r.price) : null,
-              inStock: (r.in_stock === true || r.in_stock === 'true'),
-              obs: r.obs || '',
-              img: r.img || ''
-            }));
-            // Peças novas cadastradas aparecem primeiro no topo
-            mapped.sort((a, b) => {
-              const aNew = a.id > 978;
-              const bNew = b.id > 978;
-              if (aNew && !bNew) return -1;
-              if (!aNew && bNew) return 1;
-              if (aNew && bNew) return b.id - a.id;
-              return a.id - b.id;
-            });
-            productsList = mapped;
-
-            // Salva em cache IndexedDB
-            await idbSaveCatalog(productsList);
-
-            updateDbStatusUI('connected', `${data.length} peças`);
-            refreshCategorySelect();
-            updateKPICards();
-            render();
-          } else {
-            updateDbStatusUI('connected', 'Tabela vazia');
+      // 1. Tenta buscar via REST API nativa do PostgREST (Zero dependência de bibliotecas externas, ultra-rápido)
+      try {
+        const endpoint = `${url}/rest/v1/products?select=*&limit=10000&order=id.asc`;
+        const res = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'apikey': key,
+            'Authorization': `Bearer ${key}`,
+            'Range-Unit': 'items',
+            'Range': '0-9999'
           }
+        });
 
-          // Ativa sincronização em tempo real (WebSockets)
-          setupRealtimeSubscription(client);
-          return;
-        } catch (err) {
-          console.warn('Erro ao conectar ao Supabase:', err);
-          updateDbStatusUI('local', 'Offline');
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => '');
+          console.warn('Erro na resposta REST do Supabase:', res.status, errBody);
+          throw new Error(`HTTP ${res.status}: ${errBody}`);
         }
-      } else {
-        updateDbStatusUI('local', 'Local');
+
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          return data;
+        }
+      } catch (errRest) {
+        console.warn('Tentativa via fetch nativo falhou, tentando SDK:', errRest);
       }
 
-      // Fallback: verifica se há dados mais recentes no IndexedDB local
+      // 2. Se o fetch nativo falhou, tenta pelo SDK do Supabase caso esteja carregado
+      const client = initSupabaseClient();
+      if (client) {
+        const { data, error } = await client
+          .from('products')
+          .select('*')
+          .range(0, 9999)
+          .order('id', { ascending: true });
+        if (error) throw error;
+        return data;
+      }
+
+      return null;
+    }
+
+    // 2. Conecta assincronamente ao Supabase ou IndexedDB
+    async function loadCloudDatabase() {
+      const { url, key } = getSupabaseConfig();
+      if (!url || !key) {
+        updateDbStatusUI('local', 'Local');
+        return;
+      }
+
+      updateDbStatusUI('connected', 'Conectando...');
+
+      try {
+        const data = await fetchProductsFromCloud();
+
+        if (data && data.length > 0) {
+          // Dados obtidos com sucesso do banco de dados na nuvem!
+          const mapped = data.map(r => ({
+            id: Number(r.id),
+            cat: r.cat || 'Outras Peças',
+            code: r.code || '',
+            desc: r.desc || '',
+            app: r.app || '',
+            price: (r.price !== null && r.price !== undefined) ? parseFloat(r.price) : null,
+            inStock: (r.in_stock === true || r.in_stock === 'true'),
+            obs: r.obs || '',
+            img: r.img || ''
+          }));
+
+          // Peças novas cadastradas aparecem primeiro no topo
+          mapped.sort((a, b) => {
+            const aNew = a.id > 978;
+            const bNew = b.id > 978;
+            if (aNew && !bNew) return -1;
+            if (!aNew && bNew) return 1;
+            if (aNew && bNew) return b.id - a.id;
+            return a.id - b.id;
+          });
+
+          productsList = mapped;
+
+          // Salva em cache IndexedDB local
+          await idbSaveCatalog(productsList);
+
+          updateDbStatusUI('connected', `${data.length} peças`);
+          refreshCategorySelect();
+          updateKPICards();
+          render();
+        } else if (data && data.length === 0) {
+          updateDbStatusUI('connected', 'Tabela vazia');
+        }
+
+        // Tenta inicializar Realtime WebSockets com retry
+        ensureRealtimeConnection();
+        return;
+      } catch (err) {
+        console.warn('Erro ao carregar do Supabase:', err);
+        updateDbStatusUI('local', 'Offline');
+      }
+
+      // Fallback: verifica se há dados no IndexedDB local
       try {
         const idbData = await idbGetCatalog();
         if (idbData && Array.isArray(idbData) && idbData.length > 0) {
@@ -1569,6 +1616,20 @@
       } catch(e) {}
     }
 
+    function ensureRealtimeConnection() {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        const client = initSupabaseClient();
+        if (client) {
+          clearInterval(interval);
+          setupRealtimeSubscription(client);
+        } else if (attempts > 30) {
+          clearInterval(interval);
+        }
+      }, 300);
+    }
+    
     // --- ASSINATURA EM TEMPO REAL (REALTIME WEBSOCKETS) ---
     function setupRealtimeSubscription(client) {
       if (!client || realtimeChannel) return;
@@ -2332,6 +2393,86 @@
     };
 
     // SALVAR PRODUTO: ATUALIZA DIRETO NO BANCO SUPABASE + CACHE LOCAL
+    
+    // --- OPERAÇÕES CRUD NATIVAS EM NUVEM (DIRECT FETCH + SDK FALLBACK) ---
+    async function cloudUpdateProduct(id, payload) {
+      const { url, key } = getSupabaseConfig();
+      if (!url || !key) return false;
+
+      try {
+        const res = await fetch(`${url}/rest/v1/products?id=eq.${id}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': key,
+            'Authorization': `Bearer ${key}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) return true;
+      } catch(e) {}
+
+      const client = initSupabaseClient();
+      if (client) {
+        const { error } = await client.from('products').update(payload).eq('id', id);
+        if (!error) return true;
+        throw error;
+      }
+      return false;
+    }
+
+    async function cloudInsertProduct(row) {
+      const { url, key } = getSupabaseConfig();
+      if (!url || !key) return false;
+
+      try {
+        const res = await fetch(`${url}/rest/v1/products`, {
+          method: 'POST',
+          headers: {
+            'apikey': key,
+            'Authorization': `Bearer ${key}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify(row)
+        });
+        if (res.ok) return true;
+      } catch(e) {}
+
+      const client = initSupabaseClient();
+      if (client) {
+        const { error } = await client.from('products').insert([ row ]);
+        if (!error) return true;
+        throw error;
+      }
+      return false;
+    }
+
+    async function cloudDeleteProduct(id) {
+      const { url, key } = getSupabaseConfig();
+      if (!url || !key) return false;
+
+      try {
+        const res = await fetch(`${url}/rest/v1/products?id=eq.${id}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': key,
+            'Authorization': `Bearer ${key}`
+          }
+        });
+        if (res.ok) return true;
+      } catch(e) {}
+
+      const client = initSupabaseClient();
+      if (client) {
+        const { error } = await client.from('products').delete().eq('id', id);
+        if (!error) return true;
+        throw error;
+      }
+      return false;
+    }
+
     async function saveProductForm(e) {
       e.preventDefault();
       const idStr = document.getElementById('form-id').value;
@@ -2346,7 +2487,8 @@
       const inStock = document.getElementById('form-stock').value === 'true';
       const obs = document.getElementById('form-obs').value.trim();
 
-      const client = getSupabaseClient();
+      const { url, key } = getSupabaseConfig();
+      const hasCloud = Boolean(url && key);
 
       if (idStr) {
         // Editar peça existente
@@ -2373,18 +2515,13 @@
           updated_at: new Date().toISOString()
         };
 
-        if (client) {
+        if (hasCloud) {
           showToast('⏳ Gravando alteração no banco em nuvem...');
           try {
-            const { error } = await client
-              .from('products')
-              .update(updatePayload)
-              .eq('id', targetId);
-
-            if (error) throw error;
+            await cloudUpdateProduct(targetId, updatePayload);
           } catch (errDb) {
-            showToast('⚠️ Erro ao salvar no banco em nuvem: ' + errDb.message, true);
-            console.error('Supabase update error:', errDb);
+            showToast('⚠️ Erro ao salvar no banco: ' + errDb.message, true);
+            console.error('Cloud update error:', errDb);
           }
         }
 
@@ -2412,20 +2549,17 @@
           updated_at: new Date().toISOString()
         };
 
-        if (client) {
+        if (hasCloud) {
           showToast('⏳ Gravando nova peça no banco em nuvem...');
           try {
-            const { error } = await client
-              .from('products')
-              .insert([ newProductRow ]);
-
-            if (error) throw error;
+            await cloudInsertProduct(newProductRow);
           } catch (errDb) {
-            showToast('⚠️ Erro ao salvar no banco em nuvem: ' + errDb.message, true);
-            console.error('Supabase insert error:', errDb);
+            showToast('⚠️ Erro ao salvar no banco: ' + errDb.message, true);
+            console.error('Cloud insert error:', errDb);
           }
         }
 
+        // Adiciona no topo da lista
         productsList.unshift({
           id: newId,
           cat: cat,
@@ -2444,28 +2578,24 @@
       updateKPICards();
       render();
       closeAdminModal();
-      showToast(client ? '☁️ Salvo no Banco de Dados! Todos os clientes já veem a alteração.' : '💾 Salvo localmente no navegador!');
+      showToast(hasCloud ? '☁️ Salvo no Banco de Dados! Todos os clientes já veem a alteração.' : '💾 Salvo localmente no navegador!');
     };
 
-    // EXCLUIR PRODUTO: EXCLUI DIRETO NO BANCO SUPABASE + CACHE LOCAL
     async function deleteProduct(id) {
       const item = productsList.find(x => x.id === id);
       if (!item) return;
       if (!confirm('Tem certeza que deseja excluir a peça código: ' + (item.code || 'ID ' + item.id) + '?')) return;
 
-      const client = getSupabaseClient();
-      if (client) {
+      const { url, key } = getSupabaseConfig();
+      const hasCloud = Boolean(url && key);
+
+      if (hasCloud) {
         showToast('⏳ Removendo do banco em nuvem...');
         try {
-          const { error } = await client
-            .from('products')
-            .delete()
-            .eq('id', id);
-
-          if (error) throw error;
+          await cloudDeleteProduct(id);
         } catch (errDb) {
           showToast('❌ Erro ao excluir no banco: ' + errDb.message, true);
-          console.error('Supabase delete error:', errDb);
+          console.error('Cloud delete error:', errDb);
           return;
         }
       }
@@ -2475,7 +2605,7 @@
       refreshCategorySelect();
       updateKPICards();
       render();
-      showToast(client ? '🗑️ Peça excluída do banco em nuvem para todos!' : '🗑️ Peça excluída do catálogo local!');
+      showToast(hasCloud ? '🗑️ Peça excluída do banco em nuvem para todos!' : '🗑️ Peça excluída do catálogo local!');
     };
 
     function updateKPICards() {
