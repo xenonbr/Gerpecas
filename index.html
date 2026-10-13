@@ -820,8 +820,8 @@
     </div>
     <div class="admin-actions">
       <button type="button" class="btn-admin-action btn-admin-new" id="btn-new-product">➕ Nova Peça</button>
-      <button type="button" class="btn-admin-action" id="btn-db-config" style="background: #0dcaf0; color: #000; font-weight: 700;" title="Configurações e Sincronização do Banco de Dados em Nuvem">🗄️ Banco de Dados: <span id="db-status-pill" style="background: #fff; padding: 2px 7px; border-radius: 10px; margin-left: 4px; font-weight: 700;">Conectando...</span></button>
-      <button type="button" class="btn-admin-action" id="btn-publish-github" style="background: #0d6efd; color: white;" title="Publicar alterações no site para todos os visitantes via GitHub">🚀 Backup GitHub</button>
+      <button type="button" class="btn-admin-action" id="btn-db-config" onclick="openDbModal()" style="background: #0dcaf0; color: #000; font-weight: 700; cursor: pointer;" title="Configurações e Sincronização do Banco de Dados em Nuvem">🗄️ Banco de Dados: <span id="db-status-pill" style="background: #fff; padding: 2px 7px; border-radius: 10px; margin-left: 4px; font-weight: 700;">Conectando...</span></button>
+      <button type="button" class="btn-admin-action" id="btn-publish-github" onclick="openGithubModal()" style="background: #0d6efd; color: white; cursor: pointer;" title="Publicar alterações no site para todos os visitantes via GitHub">🚀 Backup GitHub</button>
       <button type="button" class="btn-admin-action btn-admin-export" id="btn-export-json" title="Exportar catálogo atualizado em JSON">💾 Baixar JSON</button>
       <button type="button" class="btn-admin-action" id="btn-change-pwd" style="background: #6C757D; color: white;" title="Alterar senha do administrador">🔑 Senha</button>
       <button type="button" class="btn-admin-action btn-admin-reset" id="btn-reset-storage" title="Restaurar dados originais da planilha">↺ Restaurar Original</button>
@@ -1112,6 +1112,117 @@
   </div>
 
   
+  
+  <!-- Toast Notification -->
+  <div id="toast-msg" class="toast-msg"></div>
+
+  <!-- Modal Configuração de Banco de Dados Direto (Supabase) -->
+  <div class="modal-overlay" id="db-modal" style="z-index: 10000;">
+    <div class="modal-card" style="max-width: 650px;">
+      <button class="modal-close" id="db-modal-close" onclick="closeDbModal()">&times;</button>
+      <div class="modal-header">
+        <span class="card-cat" style="background: #e0f7fa; color: #00838f;">Infraestrutura em Nuvem</span>
+        <h2 style="margin-top: 8px; font-size: 1.35rem;">Banco de Dados Direto (Supabase PostgreSQL)</h2>
+      </div>
+
+      <div style="font-size: 0.92rem; color: #495057; line-height: 1.5; margin-bottom: 20px;">
+        <div id="db-status-banner" style="background: #fff3cd; color: #856404; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.2rem;">⚠️</span> <span id="db-status-banner-text">Verificando status da conexão com o banco de dados...</span>
+        </div>
+
+        <div style="border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #f8f9fa;">
+          <h4 style="margin: 0 0 10px 0; font-size: 0.98rem; color: #212529;">1. Credenciais do Banco Supabase</h4>
+          <p style="margin: 0 0 12px 0; font-size: 0.85rem; color: #6c757d;">
+            Crie seu projeto gratuito em <a href="https://supabase.com" target="_blank" style="color: #0d6efd; font-weight: 600;">supabase.com</a> e copie o URL do Projeto e a Chave Anon (em Project Settings &gt; API):
+          </p>
+          <div class="form-group">
+            <label for="db-url-input">Project URL *</label>
+            <input type="text" id="db-url-input" class="form-control" placeholder="https://xyzcompany.supabase.co">
+          </div>
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label for="db-key-input">API Anon / Public Key *</label>
+            <input type="password" id="db-key-input" class="form-control" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary" id="btn-save-db-config" style="padding: 8px 16px; font-size: 0.88rem;">
+              💾 Salvar & Conectar ao Banco
+            </button>
+            <button type="button" class="btn btn-secondary" id="btn-disconnect-db" style="padding: 8px 16px; font-size: 0.88rem; background: #6c757d; color: white;">
+              Desconectar
+            </button>
+            <span id="db-test-result" style="font-size: 0.85rem; font-weight: 600;"></span>
+          </div>
+        </div>
+
+        <div style="border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; background: #f8f9fa;">
+          <h4 style="margin: 0 0 10px 0; font-size: 0.98rem; color: #212529;">2. Carga Inicial do Catálogo</h4>
+          <p style="margin: 0 0 12px 0; font-size: 0.85rem; color: #6c757d;">
+            Após criar a tabela no Supabase com o arquivo <code>schema.sql</code>, clique no botão abaixo para gravar todas as 978 peças atuais no banco em nuvem:
+          </p>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
+            <button type="button" class="btn btn-primary" id="btn-seed-db" style="background: #198754; border-color: #198754; padding: 8px 16px; font-size: 0.88rem;">
+              📤 Enviar 978 Peças para o Banco (Carga Inicial)
+            </button>
+            <button type="button" class="btn btn-secondary" id="btn-pull-db" style="padding: 8px 16px; font-size: 0.88rem;">
+              🔄 Recarregar do Banco Agora
+            </button>
+          </div>
+          <div id="seed-progress-wrap" style="display: none; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 4px;">
+              <span id="seed-status-label">Enviando peças...</span>
+              <span id="seed-percent-label">0%</span>
+            </div>
+            <div style="background: #e9ecef; height: 10px; border-radius: 5px; overflow: hidden;">
+              <div id="seed-progress-bar" style="background: #198754; width: 0%; height: 100%; transition: width 0.2s;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Publicar no Site (GitHub / Vercel) -->
+  <div class="modal-overlay" id="github-modal" style="z-index: 10000;">
+    <div class="modal-card" style="max-width: 600px;">
+      <button class="modal-close" id="github-modal-close" onclick="closeGithubModal()">&times;</button>
+      <div class="modal-header">
+        <span class="card-cat" style="background: #e7f1ff; color: #0d6efd;">Sincronização Vercel &amp; GitHub</span>
+        <h2 style="margin-top: 8px; font-size: 1.3rem;">Publicar no Site (Para Todos os Visitantes)</h2>
+      </div>
+      <div style="font-size: 0.92rem; color: #495057; line-height: 1.5; margin-bottom: 20px;">
+        <div style="background: #d1e7dd; color: #0f5132; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-weight: 500;">
+          ✅ Todas as alterações já estão salvas com segurança no seu navegador e no Banco em Nuvem!
+        </div>
+        <p style="margin-bottom: 12px;">Para exportar uma cópia de backup do código:</p>
+
+        <div style="border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #f8f9fa;">
+          <h4 style="margin: 0 0 8px 0; font-size: 1rem; color: #212529;">Opção 1: Baixar index.html atualizado</h4>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary" id="btn-download-html" style="padding: 8px 16px; font-size: 0.9rem;">
+              📥 Baixar index.html Atualizado
+            </button>
+            <button type="button" class="btn btn-secondary" id="btn-download-json-modal" style="padding: 8px 16px; font-size: 0.9rem;">
+              📥 Baixar products.json
+            </button>
+          </div>
+        </div>
+
+        <div style="border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; background: #f8f9fa;">
+          <h4 style="margin: 0 0 8px 0; font-size: 1rem; color: #212529;">Opção 2: Commit direto no GitHub</h4>
+          <div style="margin-bottom: 10px;">
+            <input type="password" id="gh-token-input" class="form-control" placeholder="Cole seu GitHub Token (ex: ghp_...)" style="font-size: 0.88rem;">
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary" id="btn-gh-push" style="background: #24292f; border-color: #24292f; padding: 8px 16px; font-size: 0.9rem;">
+              🚀 Publicar Automaticamente no GitHub
+            </button>
+            <span id="gh-push-status" style="font-size: 0.85rem; font-weight: 500;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ==========================================================================
     // G&R PEÇAS — MOTOR DE BANCO DE DADOS DIRETO & PERSISTÊNCIA EM NUVEM
@@ -1274,6 +1385,43 @@
     }
 
     // --- CLIENTE SUPABASE (BANCO EM NUVEM DIRETO) ---
+    
+    window.openDbModal = function() {
+      const modal = document.getElementById('db-modal');
+      if (!modal) {
+        alert('Erro: elemento db-modal não encontrado na página.');
+        return;
+      }
+      const { url, key } = getSupabaseConfig();
+      const urlInp = document.getElementById('db-url-input');
+      const keyInp = document.getElementById('db-key-input');
+      const resSpan = document.getElementById('db-test-result');
+      if (urlInp) urlInp.value = url;
+      if (keyInp) keyInp.value = key;
+      if (resSpan) resSpan.textContent = '';
+      modal.style.display = 'flex';
+    };
+
+    window.closeDbModal = function() {
+      const modal = document.getElementById('db-modal');
+      if (modal) modal.style.display = 'none';
+    };
+
+    window.openGithubModal = function() {
+      const modal = document.getElementById('github-modal');
+      if (!modal) return;
+      const ghTokenInput = document.getElementById('gh-token-input');
+      if (ghTokenInput) ghTokenInput.value = localStorage.getItem('GR_PECAS_GH_TOKEN') || '';
+      const ghPushStatus = document.getElementById('gh-push-status');
+      if (ghPushStatus) ghPushStatus.textContent = '';
+      modal.style.display = 'flex';
+    };
+
+    window.closeGithubModal = function() {
+      const modal = document.getElementById('github-modal');
+      if (modal) modal.style.display = 'none';
+    };
+
     function getSupabaseConfig() {
       const url = (localStorage.getItem(DB_URL_STORAGE_KEY) || EMBEDDED_SUPABASE_URL || '').trim();
       const key = (localStorage.getItem(DB_KEY_STORAGE_KEY) || EMBEDDED_SUPABASE_ANON_KEY || '').trim();
@@ -2652,6 +2800,14 @@
     }
 
     // Iniciar aplicação e conectar ao banco de dados em nuvem
+    
+    window.addEventListener('click', (e) => {
+      const dbM = document.getElementById('db-modal');
+      const ghM = document.getElementById('github-modal');
+      if (e.target === dbM) dbM.style.display = 'none';
+      if (e.target === ghM) ghM.style.display = 'none';
+    });
+
     render();
     loadCloudDatabase();
   </script>
