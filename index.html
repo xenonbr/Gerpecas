@@ -7,9 +7,13 @@
   <meta name="description" content="E-commerce oficial da G&R Auto Peças. Peças automotivas novas e originais para veículos nacionais e importados com pronta entrega e suporte técnico especializado.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <!-- Supabase JS Client v2 -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;600;700&display=swap" media="print" onload="this.media='all'">
+  <noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;600;700&display=swap">
+  </noscript>
+  <!-- Supabase JS Client v2 (defer para desobstruir o parser sem quebrar dependências de execução) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --primary: #E52421;
@@ -1253,7 +1257,7 @@
     <div class="header-container">
       <!-- Logo & Brand -->
       <a href="index.html" class="brand-area">
-        <img src="images/logo.png" alt="G&R Auto Peças" class="brand-logo-img" onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';">
+        <img src="images/logo.png" alt="G&R Auto Peças" class="brand-logo-img" loading="eager" decoding="async" fetchpriority="high" onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';">
         <div id="logo-fallback" class="brand-title-box" style="display: none;">
           <h1>G&R <span>AUTO PEÇAS</span></h1>
           <p>Catálogo & E-commerce</p>
@@ -2158,9 +2162,12 @@
           }
           // Inicia assinatura em tempo real
           setupRealtimeSubscription();
-          // Tenta carregar dados em nuvem
+          // Tenta carregar catálogo em nuvem (respeitando cache/staleTime)
           loadProductsFromSupabase();
-          loadOrdersFromSupabase();
+          // Carrega pedidos apenas se o painel de administração estiver autenticado
+          if (isAdminActive) {
+            loadOrdersFromSupabase();
+          }
         } catch (err) {
           console.warn('Erro ao inicializar Supabase:', err);
           if (statusBadge) {
@@ -2225,8 +2232,22 @@
       }
     }
 
-    async function loadProductsFromSupabase() {
-      if (!supabaseClient) return;
+    const PRODUCTS_CACHE_KEY = 'GR_PRODUCTS_SYNC_TIME';
+    const PRODUCTS_STALE_TIME_MS = 10 * 60 * 1000; // 10 minutos
+    let isFetchingProducts = false;
+
+    async function loadProductsFromSupabase(forceRefresh = false) {
+      if (!supabaseClient || isFetchingProducts) return;
+
+      const lastSync = Number(localStorage.getItem(PRODUCTS_CACHE_KEY) || 0);
+      const isStale = (Date.now() - lastSync) > PRODUCTS_STALE_TIME_MS;
+
+      // Se os dados locais forem recentes e a chamada não for forçada, preserva o catálogo com Realtime ativo
+      if (!forceRefresh && !isStale && productsList.length > 0) {
+        return;
+      }
+
+      isFetchingProducts = true;
       try {
         const { data, error } = await supabaseClient
           .from('products')
@@ -2237,6 +2258,7 @@
         if (!error && data && data.length > 0) {
           console.log(`Carregadas ${data.length} peças diretamente do Supabase.`);
           productsList = data.map(mapSupabaseProduct);
+          localStorage.setItem(PRODUCTS_CACHE_KEY, String(Date.now()));
           applyFilters();
           updateAdminStats();
         } else {
@@ -2244,6 +2266,8 @@
         }
       } catch (e) {
         console.warn('Falha na consulta REST do Supabase:', e);
+      } finally {
+        isFetchingProducts = false;
       }
     }
 
@@ -2405,7 +2429,7 @@
 
     function renderGridProducts(items) {
       const grid = document.getElementById('products-grid');
-      grid.innerHTML = items.map(p => {
+      grid.innerHTML = items.map((p, idx) => {
         const stockBadge = p.inStock
           ? '<span class="badge-stock badge-instock">✓ Em Estoque</span>'
           : '<span class="badge-stock badge-outofstock">Sob Consulta</span>';
@@ -2414,12 +2438,17 @@
           ? 'Preço de atacado | Parcelamento sob consulta'
           : 'Consulte condições';
 
+        // Otimização LCP: Primeiros 4 cards recebem eager e async; apenas os cards subsequentes recebem lazy
+        const isAboveFold = idx < 4;
+        const loadingAttr = isAboveFold ? 'loading="eager"' : 'loading="lazy"';
+        const priorityAttr = idx === 0 ? 'fetchpriority="high"' : '';
+
         return `
           <div class="product-card">
             <div class="card-img-wrap" onclick="openProductDetailModal(${p.id})">
               <span class="card-cat-badge">${escapeHtml(p.cat)}</span>
               ${stockBadge}
-              <img src="${escapeHtml(p.img)}" alt="${escapeHtml(p.desc)}" class="card-img" loading="lazy" onerror="this.src='images/logo.png'">
+              <img src="${escapeHtml(p.img)}" alt="${escapeHtml(p.desc)}" class="card-img" ${loadingAttr} decoding="async" ${priorityAttr} onerror="this.src='images/logo.png'">
             </div>
             <div class="card-body">
               <div class="card-sku-row">
@@ -2457,7 +2486,7 @@
         return `
           <tr>
             <td>
-              <img src="${escapeHtml(p.img)}" alt="" class="table-img" loading="lazy" onerror="this.src='images/logo.png'">
+              <img src="${escapeHtml(p.img)}" alt="" class="table-img" loading="lazy" decoding="async" onerror="this.src='images/logo.png'">
             </td>
             <td>
               <span class="card-sku">${escapeHtml(p.code || 'S/N')}</span>
@@ -2846,6 +2875,7 @@
         closeModal('admin-login-modal');
         document.getElementById('admin-pwd-input').value = '';
         showToast('🔓 Modo Administrador ativado!');
+        loadOrdersFromSupabase();
         openAdminModal('dash');
       } else {
         alert('Senha incorreta!');
@@ -2868,7 +2898,7 @@
       });
 
       if (tab === 'crud') renderAdminProductsTable();
-      if (tab === 'orders') renderAdminOrdersTable();
+      if (tab === 'orders') { loadOrdersFromSupabase(); renderAdminOrdersTable(); }
       if (tab === 'supabase') {
         const { url, key } = getSupabaseCredentials();
         document.getElementById('config-supabase-url').value = url;
@@ -3239,8 +3269,11 @@
       updateAdminStats();
     }
 
+    let isFetchingOrders = false;
+
     async function loadOrdersFromSupabase() {
-      if (!supabaseClient) return;
+      if (!supabaseClient || isFetchingOrders) return;
+      isFetchingOrders = true;
       try {
         const { data, error } = await supabaseClient
           .from('orders')
@@ -3255,6 +3288,8 @@
         }
       } catch (e) {
         console.warn('Erro ao buscar pedidos no Supabase:', e);
+      } finally {
+        isFetchingOrders = false;
       }
     }
 
