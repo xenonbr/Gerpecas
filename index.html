@@ -1251,7 +1251,8 @@
         <div class="hero-benefits-grid">
           <div class="benefit-item">📦 <span>978 Peças em Estoque Real</span></div>
           <div class="benefit-item">🚀 <span>Envio Imediato para todo Brasil</span></div>
-          <div class="benefit-item">💳 <span>Até 12x no Cartão ou Desconto no PIX</span></div>
+          <div class="benefit-item">🏷️ <span>Preços de Atacado — Maiores Descontos</span></div>
+          <div class="benefit-item">💳 <span>Parcelamento sob Consulta</span></div>
           <div class="benefit-item">🛠️ <span>Suporte Técnico Especializado</span></div>
         </div>
       </div>
@@ -1370,9 +1371,12 @@
             <h2 id="modal-detail-title">Nome da Peça Automotiva</h2>
 
             <div style="margin: 16px 0; padding: 12px; background: #F9FAFB; border-radius: 8px; border: 1px solid var(--border);">
-              <div style="font-size: 0.8rem; color: var(--text-muted);">Valor à vista no PIX ou Dinheiro:</div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Preço de Atacado (À vista / PIX):</span>
+                <span style="font-size: 0.72rem; background: #FEE2E2; color: #991B1B; font-weight: 700; padding: 2px 6px; border-radius: 4px;">Maior Desconto</span>
+              </div>
               <div id="modal-detail-price" style="font-family: 'Chakra Petch'; font-size: 1.8rem; font-weight: 700; color: var(--primary);">R$ 0,00</div>
-              <div id="modal-detail-installments" style="font-size: 0.8rem; color: var(--text-muted);">ou até 12x no cartão</div>
+              <div id="modal-detail-installments" style="font-size: 0.8rem; color: #4B5563; font-weight: 500; margin-top: 4px;">* Preço baseado no valor de atacado. Parcelamento sob consulta.</div>
             </div>
 
             <table class="spec-table">
@@ -1491,7 +1495,7 @@
               <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 4px;">Forma de Pagamento Preferida *</label>
               <select id="checkout-payment" class="form-select" style="width: 100%;">
                 <option value="PIX">PIX (Chave imediata com desconto)</option>
-                <option value="Cartão de Crédito">Cartão de Crédito (em até 12x)</option>
+                <option value="Cartão de Crédito">Cartão de Crédito (Parcelamento sob consulta)</option>
                 <option value="Pagar na Retirada">Pagar no Balcão (Dinheiro / Cartão)</option>
               </select>
             </div>
@@ -2213,7 +2217,7 @@
           : '<span class="badge-stock badge-outofstock">Sob Consulta</span>';
 
         const installmentText = p.price > 0
-          ? `ou 12x de ${formatCurrency(p.price / 12)}`
+          ? 'Preço de atacado | Parcelamento sob consulta'
           : 'Consulte condições';
 
         return `
@@ -2324,7 +2328,7 @@
       document.getElementById('modal-detail-title').textContent = p.desc;
       document.getElementById('modal-detail-img').src = p.img;
       document.getElementById('modal-detail-price').textContent = formatCurrency(p.price);
-      document.getElementById('modal-detail-installments').textContent = p.price > 0 ? `ou em até 12x de ${formatCurrency(p.price / 12)}` : '';
+      document.getElementById('modal-detail-installments').textContent = p.price > 0 ? '* Preço exclusivo de atacado. Condições de parcelamento sob consulta.' : 'Consulte disponibilidade'; 
       document.getElementById('modal-detail-app').textContent = p.app || 'Compatibilidade sob consulta com nossa equipe.';
       document.getElementById('modal-detail-qty').textContent = '1';
 
