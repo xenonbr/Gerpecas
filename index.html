@@ -1661,9 +1661,12 @@
 
         <!-- Tab: Orders -->
         <div id="admin-tab-orders" class="admin-tab-content" style="display: none;">
-          <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
             <span style="font-weight: 600; font-size: 0.9rem;">Pedidos Recebidos em Tempo Real</span>
-            <button type="button" class="btn" style="background:#1F2937; color:white; padding: 6px 12px; font-size: 0.8rem;" onclick="loadOrdersFromSupabase()">🔄 Atualizar Pedidos</button>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn" style="background:#1F2937; color:white; padding: 6px 12px; font-size: 0.8rem;" onclick="loadOrdersFromSupabase()">🔄 Atualizar Pedidos</button>
+              <button type="button" class="btn" style="background:#EF4444; color:white; padding: 6px 12px; font-size: 0.8rem;" onclick="clearAllOrders()">🗑️ Limpar Todos</button>
+            </div>
           </div>
           <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm);">
             <table class="products-table" style="font-size: 0.8rem;">
@@ -1676,6 +1679,7 @@
                   <th>Total</th>
                   <th>Pagamento</th>
                   <th>Status</th>
+                  <th style="text-align: center; width: 60px;">Ação</th>
                 </tr>
               </thead>
               <tbody id="admin-orders-table-body">
@@ -2749,7 +2753,7 @@
           productsList[idx] = { id, code, cat, desc, app, price, inStock, img, obs };
         }
         if (supabaseClient) {
-          await supabaseClient.from('products').update({
+          const { error: updErr } = await supabaseClient.from('products').update({
             sku: code,
             name: desc,
             description: desc + (obs ? ` - Obs: ${obs}` : ''),
@@ -2760,8 +2764,15 @@
             image_url: img,
             is_active: inStock
           }).eq('id', id);
+          if (updErr) {
+            console.error('Erro no Supabase:', updErr);
+            showToast('Erro ao atualizar no banco: ' + updErr.message, true);
+          } else {
+            showToast('✅ Peça #' + code + ' e preço alterados no banco de dados com sucesso!');
+          }
+        } else {
+          showToast('Peça #' + code + ' atualizada localmente.');
         }
-        showToast(`Peça #${code} atualizada!`);
       } else {
         // Create
         const newId = productsList.length > 0 ? Math.max(...productsList.map(p => p.id)) + 1 : 1;
@@ -2955,7 +2966,7 @@
     function renderAdminOrdersTable() {
       const tbody = document.getElementById('admin-orders-table-body');
       if (ordersList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-muted);">Nenhum pedido recebido até o momento.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--text-muted);">Nenhum pedido recebido até o momento.</td></tr>';
         return;
       }
 
@@ -2981,9 +2992,59 @@
                 <option value="cancelado" ${o.status === 'cancelado' ? 'selected' : ''}>Cancelado</option>
               </select>
             </td>
+            <td style="text-align: center;">
+              <button type="button" class="btn" style="background:#EF4444; color:white; padding:4px 8px; font-size:0.75rem;" onclick="deleteOrder('${o.id}')" title="Excluir este pedido">🗑️</button>
+            </td>
           </tr>
         `;
       }).join('');
+    }
+
+    async function deleteOrder(orderId) {
+      const shortId = typeof orderId === 'string' ? orderId.substring(0, 8) : orderId;
+      if (!confirm(`Deseja realmente excluir o pedido #${shortId}? Esta ação removerá o pedido do banco de dados.`)) return;
+
+      if (supabaseClient) {
+        try {
+          const { error: delErr } = await supabaseClient.from('orders').delete().eq('id', orderId);
+          if (delErr) {
+            console.error('Erro ao excluir pedido no Supabase:', delErr);
+            showToast('Erro ao excluir no banco: ' + delErr.message, true);
+          }
+        } catch (err) {
+          console.warn('Erro ao conectar ao Supabase:', err);
+        }
+      }
+
+      ordersList = ordersList.filter(o => o.id !== orderId);
+      saveOrdersToStorage();
+      renderAdminOrdersTable();
+      updateAdminStats();
+      showToast(`🗑️ Pedido #${shortId} excluído com sucesso!`);
+    }
+
+    async function clearAllOrders() {
+      if (ordersList.length === 0) {
+        alert('Não há pedidos cadastrados para excluir.');
+        return;
+      }
+      if (!confirm(`ATENÇÃO: Deseja realmente excluir TODOS os ${ordersList.length} pedidos da lista? Esta ação não pode ser desfeita.`)) return;
+
+      if (supabaseClient) {
+        try {
+          const { error: delAllErr } = await supabaseClient.from('orders').delete().neq('customer_name', '___NONE___');
+          if (delAllErr) {
+            console.error('Erro ao limpar pedidos no Supabase:', delAllErr);
+            showToast('Erro ao limpar no banco: ' + delAllErr.message, true);
+          }
+        } catch (err) {}
+      }
+
+      ordersList = [];
+      saveOrdersToStorage();
+      renderAdminOrdersTable();
+      updateAdminStats();
+      showToast('🗑️ Todos os pedidos foram excluídos!');
     }
 
     async function updateOrderStatus(orderId, newStatus) {
