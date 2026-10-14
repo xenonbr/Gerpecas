@@ -1873,6 +1873,122 @@
     </div>
   </div>
 
+  <!-- Modal Detalhes Completos do Pedido Recebido (Admin) -->
+  <div class="modal-overlay" id="admin-order-detail-modal" style="z-index: 1050;">
+    <div class="modal-card" style="max-width: 780px;">
+      <div class="modal-header" style="background: #111827; color: white;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <h3 id="order-detail-modal-title" style="color: white; font-family: 'Chakra Petch'; font-size: 1.3rem;">Pedido #---</h3>
+            <span id="order-detail-status-badge" class="badge-stock badge-instock">Pendente</span>
+          </div>
+          <div id="order-detail-date-label" style="font-size: 0.75rem; color: #9CA3AF; margin-top: 2px;">Realizado em --/--/----</div>
+        </div>
+        <button type="button" class="modal-close-btn" style="color: white;" onclick="closeModal('admin-order-detail-modal')">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 20px;">
+        <!-- Seção: Dados do Cliente e Entrega -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+          <!-- Card Cliente -->
+          <div style="background: #F9FAFB; border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+            <div style="font-size: 0.8rem; font-weight: 700; color: #374151; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+              👤 Informações do Cliente
+            </div>
+            <div style="font-size: 0.95rem; font-weight: 700; color: var(--text);" id="order-detail-customer-name">---</div>
+            <div style="font-size: 0.85rem; margin-top: 6px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+              <span id="order-detail-customer-phone" style="color: #10B981; font-weight: 700;">---</span>
+              <a href="#" id="order-detail-wa-link" target="_blank" rel="noopener" class="btn btn-whatsapp-header" style="padding: 4px 10px; font-size: 0.75rem;">
+                💬 Chamar no WhatsApp
+              </a>
+            </div>
+          </div>
+
+          <!-- Card Pagamento e Entrega -->
+          <div style="background: #F9FAFB; border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+            <div style="font-size: 0.8rem; font-weight: 700; color: #374151; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+              🚚 Pagamento & Entrega
+            </div>
+            <div style="font-size: 0.85rem; margin-bottom: 4px;">
+              <strong>Forma de Pagamento:</strong> <span id="order-detail-payment-method">PIX</span>
+            </div>
+            <div style="font-size: 0.85rem; margin-bottom: 4px;">
+              <strong>Modalidade:</strong> <span id="order-detail-delivery-type">---</span>
+            </div>
+            <div style="font-size: 0.8rem; color: #6B7280;" id="order-detail-address-text">---</div>
+          </div>
+        </div>
+
+        <!-- Observações do Cliente (se houver) -->
+        <div id="order-detail-notes-container" style="display: none; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+          <strong style="color: #92400E; font-size: 0.8rem;">📝 Observações do Cliente / Veículo:</strong>
+          <div id="order-detail-notes-text" style="font-size: 0.85rem; color: #78350F; margin-top: 4px;"></div>
+        </div>
+
+        <!-- Seção: Lista de Peças Solicitadas -->
+        <div>
+          <div style="font-size: 0.9rem; font-weight: 700; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <span>📦 Peças Solicitadas no Pedido</span>
+            <span id="order-detail-items-count-badge" style="font-size: 0.75rem; background: #E5E7EB; padding: 2px 8px; border-radius: 12px; font-weight: 600;">0 itens</span>
+          </div>
+
+          <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; max-height: 260px; overflow-y: auto;">
+            <table class="products-table" style="font-size: 0.8rem; width: 100%;">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">Foto</th>
+                  <th>Peça / Descrição</th>
+                  <th style="width: 110px;">SKU</th>
+                  <th style="width: 90px; text-align: right;">Preço Unit.</th>
+                  <th style="width: 60px; text-align: center;">Qtd</th>
+                  <th style="width: 100px; text-align: right;">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody id="order-detail-items-tbody">
+                <!-- Injected via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Seção: Soma e Total -->
+        <div style="margin-top: 16px; padding: 14px; background: #F9FAFB; border-radius: 8px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <div style="font-size: 0.75rem; color: #6B7280;">Alterar Status do Pedido:</div>
+            <select id="order-detail-modal-status-select" class="form-select" style="font-size: 0.8rem; padding: 4px 8px; margin-top: 4px;" onchange="handleModalStatusChange(this.value)">
+              <option value="pendente">Pendente</option>
+              <option value="confirmado">Confirmado</option>
+              <option value="pago">Pago</option>
+              <option value="enviado">Enviado</option>
+              <option value="concluido">Concluído</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.8rem; color: #6B7280;">Soma Total do Pedido:</div>
+            <div id="order-detail-total-amount" style="font-size: 1.6rem; font-weight: 800; color: var(--primary); font-family: 'Chakra Petch';">
+              R$ 0,00
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <button type="button" class="btn" style="background: #EF4444; color: white; font-size: 0.8rem;" id="btn-modal-delete-order" onclick="handleModalDeleteOrder()">
+          🗑️ Excluir Pedido
+        </button>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn" style="background: #374151; color: white; font-size: 0.8rem;" onclick="printOrderDetails()">
+            🖨️ Imprimir Pedido
+          </button>
+          <button type="button" class="btn btn-primary" onclick="closeModal('admin-order-detail-modal')">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification -->
   <div id="toast-msg" class="toast-msg">Notificação</div>
 
@@ -3105,14 +3221,14 @@
         const orderIdShort = typeof o.id === 'string' ? o.id.substring(0, 8) : o.id;
 
         return `
-          <tr>
+          <tr onclick="openOrderDetailModal('${o.id}')" style="cursor: pointer; transition: background 0.15s;" onmouseover="this.style.backgroundColor='#F3F4F6'" onmouseout="this.style.backgroundColor=''" title="Clique para abrir detalhes do pedido">
             <td>${dateStr}</td>
-            <td><strong>#${orderIdShort}</strong></td>
-            <td>${escapeHtml(o.customer_name || '—')}</td>
-            <td><a href="https://wa.me/${(o.customer_phone || '').replace(/[^0-9]/g,'')}" target="_blank" style="color:#10B981; font-weight:600; text-decoration:none;">${escapeHtml(o.customer_phone || '—')}</a></td>
+            <td><strong style="color: var(--primary);">#${orderIdShort}</strong></td>
+            <td><strong>${escapeHtml(o.customer_name || '—')}</strong></td>
+            <td onclick="event.stopPropagation()"><a href="https://wa.me/${(o.customer_phone || '').replace(/[^0-9]/g,'')}" target="_blank" style="color:#10B981; font-weight:600; text-decoration:none;">${escapeHtml(o.customer_phone || '—')}</a></td>
             <td style="font-weight:700; color:var(--primary); font-family:'Chakra Petch';">${formatCurrency(o.total_amount)}</td>
             <td>${escapeHtml(o.payment_method || 'PIX')}</td>
-            <td>
+            <td onclick="event.stopPropagation()">
               <select class="form-select" style="padding:2px 6px; font-size:0.75rem;" onchange="updateOrderStatus('${o.id}', this.value)">
                 <option value="pendente" ${o.status === 'pendente' ? 'selected' : ''}>Pendente</option>
                 <option value="confirmado" ${o.status === 'confirmado' ? 'selected' : ''}>Confirmado</option>
@@ -3122,12 +3238,177 @@
                 <option value="cancelado" ${o.status === 'cancelado' ? 'selected' : ''}>Cancelado</option>
               </select>
             </td>
-            <td style="text-align: center;">
+            <td style="text-align: center;" onclick="event.stopPropagation()">
               <button type="button" class="btn" style="background:#EF4444; color:white; padding:4px 8px; font-size:0.75rem;" onclick="deleteOrder('${o.id}')" title="Excluir este pedido">🗑️</button>
             </td>
           </tr>
         `;
       }).join('');
+    }
+
+
+    // --- GESTÃO DE DETALHES DO PEDIDO SELECIONADO ---
+    let currentSelectedOrderId = null;
+
+    async function openOrderDetailModal(orderId) {
+      currentSelectedOrderId = orderId;
+      const order = ordersList.find(o => o.id === orderId);
+      if (!order) return;
+
+      // Renderiza cabeçalho e dados iniciais
+      const shortId = typeof order.id === 'string' ? order.id.substring(0, 8) : order.id;
+      document.getElementById('order-detail-modal-title').textContent = 'Pedido #' + shortId;
+      
+      const dateStr = order.created_at ? new Date(order.created_at).toLocaleString('pt-BR') : 'Data não informada';
+      document.getElementById('order-detail-date-label').textContent = 'Realizado em: ' + dateStr;
+
+      // Badge de status
+      const statusBadge = document.getElementById('order-detail-status-badge');
+      statusBadge.textContent = (order.status || 'pendente').toUpperCase();
+      if (order.status === 'confirmado' || order.status === 'pago') {
+        statusBadge.className = 'badge-stock badge-instock';
+      } else if (order.status === 'cancelado') {
+        statusBadge.className = 'badge-stock badge-outofstock';
+      } else {
+        statusBadge.className = 'badge-stock';
+        statusBadge.style.background = '#FEF3C7';
+        statusBadge.style.color = '#92400E';
+        statusBadge.style.border = '1px solid #FCD34D';
+      }
+
+      document.getElementById('order-detail-customer-name').textContent = order.customer_name || 'Nome não informado';
+      document.getElementById('order-detail-customer-phone').textContent = order.customer_phone || 'Sem telefone';
+      
+      const cleanPhone = (order.customer_phone || '').replace(/[^0-9]/g, '');
+      const waMsg = encodeURIComponent('Olá ' + (order.customer_name || '') + '! Aqui é da G&R Auto Peças sobre o seu pedido #' + shortId + '.');
+      document.getElementById('order-detail-wa-link').href = 'https://wa.me/' + cleanPhone + '?text=' + waMsg;
+
+      document.getElementById('order-detail-payment-method').textContent = order.payment_method || 'PIX';
+      document.getElementById('order-detail-delivery-type').textContent = order.customer_address === 'Retirada na Loja' ? 'Retirada no Balcão' : 'Entrega / Envio';
+      document.getElementById('order-detail-address-text').textContent = order.customer_address ? 'Endereço: ' + order.customer_address : 'Retirada no balcão da loja.';
+
+      // Observações
+      const notesContainer = document.getElementById('order-detail-notes-container');
+      if (order.notes) {
+        notesContainer.style.display = 'block';
+        document.getElementById('order-detail-notes-text').textContent = order.notes;
+      } else {
+        notesContainer.style.display = 'none';
+      }
+
+      // Status selector no modal
+      document.getElementById('order-detail-modal-status-select').value = order.status || 'pendente';
+      document.getElementById('order-detail-total-amount').textContent = formatCurrency(order.total_amount);
+
+      // Renderiza itens
+      const tbody = document.getElementById('order-detail-items-tbody');
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 14px; color: #6B7280;">⏳ Carregando peças do pedido...</td></tr>';
+      
+      openModal('admin-order-detail-modal');
+
+      // Busca itens no Supabase se não carregados localmente
+      let items = order.order_items || order.items || [];
+      if (supabaseClient && (!items || items.length === 0)) {
+        try {
+          const { data, error } = await supabaseClient
+            .from('order_items')
+            .select('*')
+            .eq('order_id', orderId);
+          if (!error && data && data.length > 0) {
+            items = data;
+            order.order_items = data;
+          }
+        } catch (err) {
+          console.warn('Erro ao carregar itens do pedido no Supabase:', err);
+        }
+      }
+
+      // Renderiza lista das peças
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #6B7280;">Nenhuma peça detalhada foi gravada para este pedido.</td></tr>';
+        document.getElementById('order-detail-items-count-badge').textContent = '0 peças';
+        return;
+      }
+
+      let totalPieces = 0;
+      let calculatedSum = 0;
+
+      tbody.innerHTML = items.map(item => {
+        const product = resolveOrderItemProduct(item);
+        const qty = item.quantity || 1;
+        const unitPrice = parseFloat(item.price !== undefined ? item.price : product.price) || 0;
+        const subtotal = unitPrice * qty;
+        totalPieces += qty;
+        calculatedSum += subtotal;
+
+        return `
+          <tr>
+            <td>
+              <img src="${escapeHtml(product.img)}" style="width: 40px; height: 40px; object-fit: contain; background: white; border: 1px solid #E5E7EB; border-radius: 4px;" onerror="this.src='images/logo.png'">
+            </td>
+            <td>
+              <strong style="display: block; color: #111827;">${escapeHtml(product.desc)}</strong>
+              <span style="font-size: 0.7rem; color: #6B7280;">${escapeHtml(product.cat || 'Auto Peças')}</span>
+            </td>
+            <td>
+              <span class="card-sku" style="font-size: 0.75rem;">${escapeHtml(product.code || 'S/N')}</span>
+            </td>
+            <td style="text-align: right; font-weight: 600;">
+              ${formatCurrency(unitPrice)}
+            </td>
+            <td style="text-align: center; font-weight: 700; color: #374151;">
+              ${qty}x
+            </td>
+            <td style="text-align: right; font-weight: 700; color: var(--primary); font-family: 'Chakra Petch';">
+              ${formatCurrency(subtotal)}
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('order-detail-items-count-badge').textContent = totalPieces + (totalPieces === 1 ? ' peça' : ' peças');
+    }
+
+    function resolveOrderItemProduct(item) {
+      if (item.product) return item.product;
+      const found = productsList.find(p => p.id === item.product_id);
+      if (found) return found;
+      return {
+        id: item.product_id,
+        desc: 'Peça #' + (item.product_id || '—'),
+        code: 'ID ' + (item.product_id || '—'),
+        cat: 'Peça Automotiva',
+        price: item.price || 0,
+        img: 'images/p_' + (item.product_id || '1') + '.jpg'
+      };
+    }
+
+    function handleModalStatusChange(newStatus) {
+      if (!currentSelectedOrderId) return;
+      updateOrderStatus(currentSelectedOrderId, newStatus);
+      const statusBadge = document.getElementById('order-detail-status-badge');
+      if (statusBadge) {
+        statusBadge.textContent = newStatus.toUpperCase();
+        if (newStatus === 'confirmado' || newStatus === 'pago') {
+          statusBadge.className = 'badge-stock badge-instock';
+        } else if (newStatus === 'cancelado') {
+          statusBadge.className = 'badge-stock badge-outofstock';
+        } else {
+          statusBadge.className = 'badge-stock';
+          statusBadge.style.background = '#FEF3C7';
+          statusBadge.style.color = '#92400E';
+        }
+      }
+    }
+
+    function handleModalDeleteOrder() {
+      if (!currentSelectedOrderId) return;
+      closeModal('admin-order-detail-modal');
+      deleteOrder(currentSelectedOrderId);
+    }
+
+    function printOrderDetails() {
+      window.print();
     }
 
     async function deleteOrder(orderId) {
