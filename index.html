@@ -1184,6 +1184,52 @@
       .hero-title { font-size: 1.7rem; }
       .card-actions-grid { grid-template-columns: 1fr; }
     }
+
+    /* ==========================================================================
+       ESTILOS DE IMPRESSÃO PROFISSIONAL (@media print)
+       ========================================================================== */
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #admin-order-detail-modal,
+      #admin-order-detail-modal .modal-card,
+      #admin-order-detail-modal .modal-body,
+      #admin-order-detail-modal .modal-body * {
+        visibility: visible !important;
+      }
+      #admin-order-detail-modal {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        background: white !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        display: block !important;
+      }
+      #admin-order-detail-modal .modal-card {
+        box-shadow: none !important;
+        border: none !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      .modal-header,
+      .modal-footer,
+      .modal-close-btn,
+      #btn-modal-delete-order,
+      .top-bar,
+      header,
+      footer,
+      .admin-bar,
+      .categories-bar,
+      .hero-banner,
+      .main-container {
+        display: none !important;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -1977,8 +2023,11 @@
         <button type="button" class="btn" style="background: #EF4444; color: white; font-size: 0.8rem;" id="btn-modal-delete-order" onclick="handleModalDeleteOrder()">
           🗑️ Excluir Pedido
         </button>
-        <div style="display: flex; gap: 8px;">
-          <button type="button" class="btn" style="background: #374151; color: white; font-size: 0.8rem;" onclick="printOrderDetails()">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn" style="background: #2563EB; color: white; font-size: 0.8rem;" onclick="copyOrderSummaryText()" title="Copiar resumo completo do pedido em texto">
+            📋 Copiar Texto
+          </button>
+          <button type="button" class="btn" style="background: #111827; color: white; font-size: 0.8rem;" onclick="printOrderDetails()" title="Imprimir comprovante formatado do pedido">
             🖨️ Imprimir Pedido
           </button>
           <button type="button" class="btn btn-primary" onclick="closeModal('admin-order-detail-modal')">
@@ -3408,7 +3457,225 @@
     }
 
     function printOrderDetails() {
-      window.print();
+      const order = ordersList.find(o => o.id === currentSelectedOrderId);
+      if (!order) {
+        showToast('Nenhum pedido selecionado para impressão.', true);
+        return;
+      }
+
+      const shortId = typeof order.id === 'string' ? order.id.substring(0, 8) : order.id;
+      const dateStr = order.created_at ? new Date(order.created_at).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
+      const items = order.order_items || order.items || [];
+
+      let totalPieces = 0;
+      let itemsRowsHtml = '';
+
+      items.forEach(item => {
+        const product = resolveOrderItemProduct(item);
+        const qty = item.quantity || 1;
+        const unitPrice = parseFloat(item.price !== undefined ? item.price : product.price) || 0;
+        const subtotal = unitPrice * qty;
+        totalPieces += qty;
+
+        itemsRowsHtml += `
+          <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #ddd; font-family: monospace; font-weight: bold;">${escapeHtml(product.code || 'S/N')}</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #ddd;">
+              <strong>${escapeHtml(product.desc)}</strong><br>
+              <span style="font-size: 11px; color: #666;">${escapeHtml(product.cat || 'Auto Peças')}</span>
+            </td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #ddd; text-align: right;">${formatCurrency(unitPrice)}</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #ddd; text-align: center; font-weight: bold;">${qty}x</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold; color: #E52421;">${formatCurrency(subtotal)}</td>
+          </tr>
+        `;
+      });
+
+      if (items.length === 0) {
+        itemsRowsHtml = '<tr><td colspan="5" style="text-align: center; padding: 14px; color: #888;">Nenhuma peça detalhada foi gravada para este pedido</td></tr>';
+      }
+
+      const receiptDoc = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Comprovante Pedido #${shortId} — G&R Auto Peças</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #111; padding: 24px; background: #fff; line-height: 1.4; font-size: 13px; }
+    .header { border-bottom: 3px solid #E52421; padding-bottom: 14px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .header h1 { font-size: 22px; color: #E52421; font-weight: 800; }
+    .header p { font-size: 12px; color: #555; }
+    .badge-protocol { font-size: 14px; font-family: monospace; font-weight: bold; background: #eee; padding: 4px 10px; border-radius: 4px; display: inline-block; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+    .card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; }
+    .card h3 { font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 6px; border-bottom: 1px solid #eee; padding-bottom: 4px; font-weight: bold; }
+    .card p { margin-bottom: 4px; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 12px; }
+    th { background: #111; color: #fff; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; }
+    .total-box { background: #fdf2f2; border: 2px solid #E52421; border-radius: 6px; padding: 14px; text-align: right; margin-bottom: 24px; }
+    .total-box .total-label { font-size: 12px; color: #555; margin-bottom: 4px; }
+    .total-box .total-val { font-size: 24px; font-weight: 800; color: #E52421; }
+    .signature-area { margin-top: 36px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; padding-top: 10px; }
+    .signature-line { border-top: 1px solid #444; text-align: center; font-size: 11px; padding-top: 4px; color: #444; }
+    .action-bar { background: #111; color: #fff; padding: 12px 20px; margin-bottom: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .btn-action { background: #E52421; color: #fff; border: none; padding: 8px 18px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; }
+    @media print {
+      .action-bar { display: none !important; }
+      body { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="action-bar">
+    <span style="font-weight: 600;">Comprovante de Pedido — G&R Auto Peças</span>
+    <div>
+      <button class="btn-action" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+      <button class="btn-action" style="background: #4B5563; margin-left: 8px;" onclick="window.close()">Fechar</button>
+    </div>
+  </div>
+
+  <div class="header">
+    <div>
+      <h1>G&R AUTO PEÇAS</h1>
+      <p>Peças Automotivas Nacionais e Importadas | WhatsApp: (11) 96288-3818</p>
+      <p>Chave PIX Oficial: 11940747125</p>
+    </div>
+    <div style="text-align: right;">
+      <div class="badge-protocol">PEDIDO #${shortId}</div>
+      <div style="font-size: 11px; color: #666; margin-top: 4px;">Data: ${dateStr}</div>
+      <div style="font-size: 12px; font-weight: bold; text-transform: uppercase; color: #E52421; margin-top: 2px;">Status: ${order.status || 'Pendente'}</div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="card">
+      <h3>Dados do Cliente</h3>
+      <p><strong>Nome:</strong> ${escapeHtml(order.customer_name || 'Não informado')}</p>
+      <p><strong>Telefone / WhatsApp:</strong> ${escapeHtml(order.customer_phone || 'Não informado')}</p>
+    </div>
+    <div class="card">
+      <h3>Pagamento & Entrega</h3>
+      <p><strong>Forma de Pagamento:</strong> ${escapeHtml(order.payment_method || 'PIX')}</p>
+      <p><strong>Modalidade:</strong> ${escapeHtml(order.customer_address === 'Retirada na Loja' ? 'Retirada no Balcão' : 'Entrega / Envio')}</p>
+      <p><strong>Endereço:</strong> ${escapeHtml(order.customer_address || 'Retirada na loja')}</p>
+    </div>
+  </div>
+
+  ${order.notes ? `
+  <div class="card" style="margin-bottom: 18px; background: #fffde7; border-color: #ffe082;">
+    <h3 style="color: #f57f17;">Observações do Pedido / Veículo</h3>
+    <p style="color: #333;">${escapeHtml(order.notes)}</p>
+  </div>
+  ` : ''}
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 140px;">Código SKU</th>
+        <th>Descrição da Peça</th>
+        <th style="width: 110px; text-align: right;">Preço Unit.</th>
+        <th style="width: 70px; text-align: center;">Qtd</th>
+        <th style="width: 110px; text-align: right;">Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsRowsHtml}
+    </tbody>
+  </table>
+
+  <div class="total-box">
+    <div class="total-label">Total de Peças: <strong>${totalPieces}</strong> | Preços baseados no atacado</div>
+    <div class="total-val">${formatCurrency(order.total_amount)}</div>
+  </div>
+
+  <div class="signature-area">
+    <div class="signature-line">Separado / Conferido por (Estoque)</div>
+    <div class="signature-line">Recebido por (Cliente / Transportadora)</div>
+  </div>
+
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        try {
+          window.print();
+        } catch(e) {}
+      }, 400);
+    });
+  <\/script>
+</body>
+</html>`;
+
+      try {
+        const printWin = window.open('', '_blank', 'width=850,height=800,menubar=no,toolbar=no,location=no');
+        if (printWin) {
+          printWin.document.open();
+          printWin.document.write(receiptDoc);
+          printWin.document.close();
+          showToast('🖨️ Janela de impressão aberta!');
+          return;
+        }
+      } catch (e) {
+        console.warn('Popup bloqueado:', e);
+      }
+
+      // Fallback nativo: dispara window.print() direto na página
+      try {
+        window.print();
+        showToast('🖨️ Diálogo de impressão aberto!');
+      } catch (err) {
+        alert('Para imprimir, clique em Copiar Texto ou habilite popups no seu navegador.');
+      }
+    }
+
+    function copyOrderSummaryText() {
+      const order = ordersList.find(o => o.id === currentSelectedOrderId);
+      if (!order) return;
+
+      const shortId = typeof order.id === 'string' ? order.id.substring(0, 8) : order.id;
+      const dateStr = order.created_at ? new Date(order.created_at).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
+      const items = order.order_items || order.items || [];
+
+      let itemsTxt = '';
+      items.forEach(item => {
+        const p = resolveOrderItemProduct(item);
+        const qty = item.quantity || 1;
+        const price = parseFloat(item.price !== undefined ? item.price : p.price) || 0;
+        itemsTxt += '• ' + qty + 'x ' + p.desc + ' (SKU: ' + (p.code || 'S/N') + ') - ' + formatCurrency(price * qty) + String.fromCharCode(10);
+      });
+
+      const fullSummary = [
+        '🚗 COMPROVANTE DE PEDIDO — G&R AUTO PEÇAS',
+        'Protocolo: #' + shortId,
+        'Data: ' + dateStr,
+        'Status: ' + (order.status || 'Pendente').toUpperCase(),
+        '',
+        'CLIENTE:',
+        'Nome: ' + (order.customer_name || 'Não informado'),
+        'Telefone: ' + (order.customer_phone || 'Não informado'),
+        'Entrega: ' + (order.customer_address || 'Retirada na loja'),
+        'Pagamento: ' + (order.payment_method || 'PIX'),
+        order.notes ? ('Observações: ' + order.notes) : '',
+        '',
+        'ITENS SOLICITADOS:',
+        itemsTxt || 'Itens detalhados não informados',
+        '',
+        'VALOR TOTAL: ' + formatCurrency(order.total_amount),
+        '',
+        'G&R Auto Peças | WhatsApp: (11) 96288-3818'
+      ].filter(Boolean).join(String.fromCharCode(10));
+
+      navigator.clipboard.writeText(fullSummary).then(() => {
+        showToast('📋 Resumo do pedido copiado com sucesso!');
+      }).catch(() => {
+        const textarea = document.createElement('textarea');
+        textarea.value = fullSummary;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('📋 Resumo do pedido copiado!');
+      });
     }
 
     async function deleteOrder(orderId) {
