@@ -251,22 +251,53 @@
       border-color: #6B7280;
     }
 
-    /* Subnav - Categories Bar */
+    /* Subnav - Categories Bar with Smooth Infinite Marquee */
     .categories-bar {
       background: #1F2937;
       border-bottom: 1px solid #374151;
-      padding: 8px 20px;
-      overflow-x: auto;
+      padding: 10px 0;
+      overflow: hidden;
       white-space: nowrap;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: thin;
+      position: relative;
+      user-select: none;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
     }
-    .categories-bar-container {
-      max-width: 1360px;
-      margin: 0 auto;
-      display: flex;
+    .categories-bar::before,
+    .categories-bar::after {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 48px;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .categories-bar::before {
+      left: 0;
+      background: linear-gradient(to right, #1F2937 20%, transparent 100%);
+    }
+    .categories-bar::after {
+      right: 0;
+      background: linear-gradient(to left, #1F2937 20%, transparent 100%);
+    }
+    .categories-marquee-track {
+      display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      width: max-content;
+      animation: marqueeCategoryScroll 65s linear infinite;
+      will-change: transform;
+    }
+    .categories-bar:hover .categories-marquee-track,
+    .categories-marquee-track:hover {
+      animation-play-state: paused;
+    }
+    @keyframes marqueeCategoryScroll {
+      0% {
+        transform: translateX(0);
+      }
+      100% {
+        transform: translateX(-50%);
+      }
     }
     .cat-chip {
       display: inline-flex;
@@ -275,12 +306,13 @@
       background: #111827;
       color: #D1D5DB;
       font-size: 0.8rem;
-      padding: 5px 12px;
+      padding: 6px 14px;
       border-radius: 20px;
       border: 1px solid #374151;
       cursor: pointer;
       transition: var(--transition);
       user-select: none;
+      flex-shrink: 0;
     }
     .cat-chip:hover {
       background: #374151;
@@ -1209,14 +1241,10 @@
     </div>
   </header>
 
-  <!-- Categories Horizontal Navigation Bar -->
-  <nav class="categories-bar">
-    <div class="categories-bar-container" id="categories-chips-container">
-      <!-- Injected via JS -->
-      <div class="cat-chip active" onclick="filterByCategory('all')">
-        <span>Todas as Peças</span>
-        <span class="cat-chip-count">978</span>
-      </div>
+  <!-- Categories Horizontal Navigation Bar with Auto-Scroll Animation -->
+  <nav class="categories-bar" title="Passe o mouse para pausar a rolagem">
+    <div class="categories-marquee-track" id="categories-chips-container" ontouchstart="this.style.animationPlayState='paused'" ontouchend="this.style.animationPlayState='running'">
+      <!-- Injected via JS (Conjunto duplicado para loop infinito suave) -->
     </div>
   </nav>
 
@@ -2087,7 +2115,7 @@
         counts[p.cat] = (counts[p.cat] || 0) + 1;
       });
 
-      let html = `
+      let singleSetHtml = `
         <div class="cat-chip ${activeCategory === 'all' ? 'active' : ''}" onclick="filterByCategory('all')">
           <span>Todas as Peças</span>
           <span class="cat-chip-count">${productsList.length}</span>
@@ -2096,7 +2124,7 @@
 
       categoriesList.forEach(c => {
         const count = counts[c.name] || 0;
-        html += `
+        singleSetHtml += `
           <div class="cat-chip ${activeCategory === c.name ? 'active' : ''}" onclick="filterByCategory('${c.name}')">
             <span>${c.name}</span>
             <span class="cat-chip-count">${count}</span>
@@ -2104,7 +2132,8 @@
         `;
       });
 
-      container.innerHTML = html;
+      // Duplica a lista de categorias para animação de esteira infinita sem emendas (-50%)
+      container.innerHTML = singleSetHtml + singleSetHtml;
     }
 
     function renderPopulateCategorySelects() {
