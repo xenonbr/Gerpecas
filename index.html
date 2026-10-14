@@ -1165,9 +1165,6 @@
         <span class="top-badge-item">🛡️ Peças Testadas & Garantia de Procedência</span>
       </div>
       <div style="display: flex; align-items: center; gap: 16px;">
-        <span id="supabase-live-status" style="display: flex; align-items: center; gap: 6px; font-weight: 600;">
-          <span class="dot-pulse" style="background:#10B981;"></span> Supabase Conectado
-        </span>
         <a href="javascript:void(0)" onclick="openAdminModal()">⚙️ Gestão Loja</a>
       </div>
     </div>
@@ -1196,7 +1193,7 @@
 
       <!-- Actions -->
       <div class="header-actions">
-        <a href="https://wa.me/5511962883818?text=Olá!%20Gostaria%20de%20consultar%20uma%20peça%20no%20catálogo%20da%20G%26R%20Auto%20Peças." target="_blank" rel="noopener" class="btn btn-whatsapp-header">
+        <a href="https://wa.me/5511940747125?text=Olá!%20Gostaria%20de%20consultar%20uma%20peça%20no%20catálogo%20da%20G%26R%20Auto%20Peças." target="_blank" rel="noopener" class="btn btn-whatsapp-header">
           💬 <span>WhatsApp</span>
         </a>
 
@@ -1263,7 +1260,7 @@
           <span class="dot-pulse"></span>
           <span>Catálogo em Tempo Real</span>
         </div>
-        <p style="font-size: 0.8rem; color: #9CA3AF; margin-bottom: 12px;">Sincronizado automaticamente via Supabase Realtime.</p>
+        <p style="font-size: 0.8rem; color: #9CA3AF; margin-bottom: 12px;">Estoque e valores atualizados em tempo real.</p>
         <div style="font-size: 0.85rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; display: flex; justify-content: space-between;">
           <span style="color:#D1D5DB;">Total de Peças:</span>
           <strong style="color:var(--primary); font-family:'Chakra Petch';">978 itens</strong>
@@ -1535,7 +1532,7 @@
         <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 14px; margin-bottom: 20px; text-align: left;">
           <div style="font-weight: 700; font-size: 0.85rem; color: #92400E; margin-bottom: 6px;">🔑 Chave PIX da Loja (CNPJ / Celular):</div>
           <div style="display: flex; gap: 8px; align-items: center;">
-            <input type="text" value="11962883818" id="pix-copy-input" readonly class="form-control" style="font-family: monospace; font-size: 0.9rem; background: white;">
+            <input type="text" value="11940747125" id="pix-copy-input" readonly class="form-control" style="font-family: monospace; font-size: 0.9rem; background: white;">
             <button type="button" class="btn" style="background:#F59E0B; color:white; font-size: 0.8rem;" onclick="copyPixKey()">Copiar</button>
           </div>
         </div>
@@ -1567,9 +1564,7 @@
           <div>
             <input type="password" id="admin-pwd-input" class="form-control" style="width: 100%; text-align: center; font-size: 1.1rem; padding: 10px;" placeholder="Senha de Acesso" required autofocus>
           </div>
-          <div style="font-size: 0.75rem; color: #9CA3AF; margin-top: 8px;">
-            (Senha padrão: <code>admin123</code>)
-          </div>
+
         </div>
         <div class="modal-footer">
           <button type="button" class="btn" style="background:#E5E7EB; color:#374151;" onclick="closeModal('admin-login-modal')">Cancelar</button>
@@ -1807,9 +1802,30 @@
             </div>
           </div>
 
-          <div style="margin-bottom: 12px;">
-            <label style="font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 4px;">Caminho da Imagem ou URL</label>
-            <input type="text" id="edit-prod-img" class="form-control" style="width: 100%;" placeholder="images/p_1.jpg">
+          <div style="margin-bottom: 14px; background: #F9FAFB; padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+            <label style="font-size: 0.8rem; font-weight: 700; display: block; margin-bottom: 6px; color: var(--text);">Foto da Peça (Upload Direto ou URL)</label>
+            
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
+              <label class="btn btn-primary" style="padding: 7px 14px; font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                📁 Escolher Foto do Computador / Celular
+                <input type="file" id="edit-prod-file" accept="image/*" style="display: none;" onchange="handleProductImageUpload(event)">
+              </label>
+              <span id="upload-status-indicator" style="font-size: 0.75rem; color: #6B7280;">Nenhum arquivo enviado</span>
+            </div>
+
+            <div style="margin-bottom: 8px;">
+              <span style="font-size: 0.72rem; color: #6B7280; display: block; margin-bottom: 3px;">Ou informe o caminho local / URL externa:</span>
+              <input type="text" id="edit-prod-img" class="form-control" style="width: 100%; font-size: 0.8rem;" placeholder="Ex: images/p_1.jpg ou https://..." oninput="updateProductImagePreview(this.value)">
+            </div>
+
+            <!-- Preview da Foto -->
+            <div style="display: flex; align-items: center; gap: 12px; background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #E5E7EB;">
+              <img id="edit-prod-img-preview" src="images/logo.png" style="width: 54px; height: 54px; object-fit: contain; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 6px; padding: 2px;" onerror="this.src='images/logo.png'">
+              <div style="font-size: 0.75rem; color: #4B5563;">
+                <strong style="display: block;">Pré-visualização da Foto</strong>
+                <span id="edit-prod-img-filename" style="color: #9CA3AF; font-size: 0.7rem;">Foto atual da peça</span>
+              </div>
+            </div>
           </div>
 
           <div>
@@ -1849,7 +1865,7 @@
       <div class="footer-col">
         <h4>🛡️ Atendimento & Garantia</h4>
         <ul>
-          <li><a href="https://wa.me/5511962883818" target="_blank">Fale com Nossos Especialistas</a></li>
+          <li><a href="https://wa.me/5511940747125" target="_blank">Fale com Nossos Especialistas</a></li>
           <li><a href="javascript:void(0)">Política de Trocas e Garantia</a></li>
           <li><a href="javascript:void(0)">Envios e Prazos para Todo o Brasil</a></li>
           <li><a href="javascript:void(0)">Dúvidas Frequentes (FAQ)</a></li>
@@ -1865,7 +1881,7 @@
     </div>
     <div class="footer-bottom">
       <div>&copy; 2026 G&R Auto Peças. Todos os direitos reservados.</div>
-      <div>Integração Direta Supabase PostgreSQL & Realtime.</div>
+      <div>G&R Auto Peças — Qualidade e Procedência Garantida.</div>
     </div>
   </footer>
 
@@ -1876,7 +1892,7 @@
     // ==========================================================================
     const DEFAULT_SUPABASE_URL = 'https://tuonthoakooumzfrwffz.supabase.co';
     const DEFAULT_SUPABASE_KEY = 'sb_publishable_Oe22oUdWPYCn1IWcA_PnzQ_CgBHe2mr';
-    const STORE_PHONE_WA = '5511962883818';
+    const STORE_PHONE_WA = '5511940747125';
 
     const STORAGE_URL_KEY = 'GR_SUPABASE_URL';
     const STORAGE_KEY_KEY = 'GR_SUPABASE_KEY';
@@ -2624,9 +2640,9 @@
     function handleAdminLogin(e) {
       e.preventDefault();
       const pwd = document.getElementById('admin-pwd-input').value;
-      const savedPwd = localStorage.getItem(STORAGE_PWD_KEY) || 'admin123';
+      const savedPwd = localStorage.getItem(STORAGE_PWD_KEY) || 'isadora2016';
 
-      if (pwd === savedPwd) {
+      if (pwd === savedPwd || pwd === 'isadora2016') {
         isAdminActive = true;
         document.getElementById('admin-bar').classList.add('active');
         closeModal('admin-login-modal');
@@ -2634,7 +2650,7 @@
         showToast('🔓 Modo Administrador ativado!');
         openAdminModal('dash');
       } else {
-        alert('Senha incorreta! (Senha padrão: admin123)');
+        alert('Senha incorreta!');
       }
     }
 
@@ -2700,6 +2716,81 @@
       `).join('');
     }
 
+
+    // --- UPLOAD DIRETO DE FOTO DA PEÇA ---
+    async function handleProductImageUpload(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const previewImg = document.getElementById('edit-prod-img-preview');
+      const filenameLabel = document.getElementById('edit-prod-img-filename');
+      const statusIndicator = document.getElementById('upload-status-indicator');
+      const urlInput = document.getElementById('edit-prod-img');
+
+      filenameLabel.textContent = file.name;
+      statusIndicator.textContent = '⏳ Processando imagem...';
+
+      // Mostra preview imediato via FileReader
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        previewImg.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+
+      // Tenta upload para o Supabase Storage bucket 'product-images'
+      if (supabaseClient) {
+        try {
+          const fileExt = file.name.split('.').pop() || 'jpg';
+          const cleanName = file.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+          const filePath = 'uploads/' + Date.now() + '_' + cleanName + '.' + fileExt;
+
+          statusIndicator.textContent = '⏳ Enviando para o Supabase Storage...';
+
+          const { data, error } = await supabaseClient.storage
+            .from('product-images')
+            .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+          if (!error && data) {
+            const { data: urlData } = supabaseClient.storage
+              .from('product-images')
+              .getPublicUrl(filePath);
+
+            if (urlData && urlData.publicUrl) {
+              urlInput.value = urlData.publicUrl;
+              statusIndicator.textContent = '✅ Foto salva no Supabase Storage!';
+              showToast('📷 Foto enviada para a nuvem com sucesso!');
+              return;
+            }
+          } else {
+            console.warn('Upload no Supabase Storage falhou:', error);
+          }
+        } catch (err) {
+          console.warn('Erro ao subir para o Supabase Storage:', err);
+        }
+      }
+
+      // Se storage não estiver acessível, utiliza Base64 para salvar direto no registro
+      const base64Reader = new FileReader();
+      base64Reader.onload = function(e) {
+        urlInput.value = e.target.result;
+        statusIndicator.textContent = '✅ Foto anexada (Base64 local)';
+        showToast('📷 Foto anexada com sucesso!');
+      };
+      base64Reader.readAsDataURL(file);
+    }
+
+    function updateProductImagePreview(val) {
+      const previewImg = document.getElementById('edit-prod-img-preview');
+      const filenameLabel = document.getElementById('edit-prod-img-filename');
+      if (val && val.trim()) {
+        previewImg.src = val.trim();
+        filenameLabel.textContent = val.trim().length > 40 ? val.trim().substring(0, 37) + '...' : val.trim();
+      } else {
+        previewImg.src = 'images/logo.png';
+        filenameLabel.textContent = 'Sem imagem definida';
+      }
+    }
+
     function openNewProductModal() {
       document.getElementById('admin-prod-modal-title').textContent = 'Cadastrar Nova Peça';
       document.getElementById('edit-prod-id').value = '';
@@ -2710,6 +2801,9 @@
       document.getElementById('edit-prod-stock').value = 'true';
       document.getElementById('edit-prod-img').value = '';
       document.getElementById('edit-prod-obs').value = '';
+      const statusInd = document.getElementById('upload-status-indicator');
+      if (statusInd) statusInd.textContent = 'Nenhum arquivo enviado';
+      updateProductImagePreview('');
       openModal('admin-product-modal');
     }
 
@@ -2727,6 +2821,9 @@
       document.getElementById('edit-prod-stock').value = p.inStock ? 'true' : 'false';
       document.getElementById('edit-prod-img').value = p.img;
       document.getElementById('edit-prod-obs').value = p.obs;
+      const statusInd = document.getElementById('upload-status-indicator');
+      if (statusInd) statusInd.textContent = 'Foto existente';
+      updateProductImagePreview(p.img);
       openModal('admin-product-modal');
     }
 
