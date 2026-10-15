@@ -2272,8 +2272,8 @@
           }
           // Inicia assinatura em tempo real
           setupRealtimeSubscription();
-          // Sempre busca os preços e dados mais recentes diretamente do Supabase ao carregar a página
-          loadProductsFromSupabase(true);
+          // Carrega catálogo em nuvem respeitando cache local (10 min) + Realtime ativo para evitar requisições desnecessárias
+          loadProductsFromSupabase(false);
           // Carrega pedidos apenas se o painel de administração estiver autenticado
           if (isAdminActive) {
             loadOrdersFromSupabase();
@@ -2349,10 +2349,20 @@
     }
 
     const PRODUCTS_CACHE_KEY = 'GR_PRODUCTS_SYNC_TIME';
+    const PRODUCTS_STALE_TIME_MS = 10 * 60 * 1000; // 10 minutos
     let isFetchingProducts = false;
 
-    async function loadProductsFromSupabase(forceRefresh = true) {
+    async function loadProductsFromSupabase(forceRefresh = false) {
       if (!supabaseClient || isFetchingProducts) return;
+
+      const lastSync = Number(localStorage.getItem(PRODUCTS_CACHE_KEY) || 0);
+      const isStale = (Date.now() - lastSync) > PRODUCTS_STALE_TIME_MS;
+      const hasCachedCatalog = Boolean(localStorage.getItem(STORAGE_PRODUCTS_DATA_KEY));
+
+      // Preserva o cache local se já houver catálogo sincronizado no localStorage e estiver dentro da janela de 10 min (Realtime mantém atualizado sem requisições extras)
+      if (!forceRefresh && !isStale && hasCachedCatalog && productsList.length > 0) {
+        return;
+      }
 
       isFetchingProducts = true;
       try {
@@ -2361,10 +2371,11 @@
           .from('products')
           .select('*')
           .order('id', { ascending: true })
-          .limit(2000);
+          .limit(1000);
 
         if (!error && data && data.length > 0) {
           console.log(`Carregadas ${data.length} peças diretamente do Supabase.`);
+          const prevSnapshot = JSON.stringify(productsList);
           const mappedFromDb = data.map(mapSupabaseProduct);
 
           // Se o banco tiver o catálogo completo, substitui; se tiver atualização parcial, mescla pelo ID
@@ -2385,8 +2396,12 @@
 
           localStorage.setItem(PRODUCTS_CACHE_KEY, String(Date.now()));
           saveProductsToStorage();
-          renderCategoryChips();
-          applyFilters();
+
+          // Só re-renderiza o DOM se houver mudança real nos dados, evitando recarregar imagens/cards desnecessariamente
+          if (JSON.stringify(productsList) !== prevSnapshot) {
+            renderCategoryChips();
+            applyFilters();
+          }
           updateAdminStats();
           if (isAdminActive) renderAdminProductsTable();
         } else if (error) {
@@ -2838,7 +2853,7 @@
         listContainer.innerHTML = cart.map(item => `
           <div class="cart-item-card">
             <button type="button" class="cart-item-remove-btn" onclick="removeCartItem(${item.product.id})" title="Remover">&times;</button>
-            <img src="${escapeHtml(item.product.img || 'images/logo.png')}" class="cart-item-thumb" alt="" onerror="this.onerror=null; this.src='images/logo.png';">
+            <img src="${escapeHtml(item.product.img || 'images/logo.png')}" class="cart-item-thumb" alt="" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='images/logo.png';">
             <div class="cart-item-details">
               <span class="cart-item-title">${escapeHtml(item.product.desc)}</span>
               <span class="cart-item-sku">SKU: ${escapeHtml(item.product.code || 'S/N')}</span>
@@ -3093,7 +3108,7 @@
       tbody.innerHTML = filtered.map(p => `
         <tr>
           <td>${p.id}</td>
-          <td><img src="${escapeHtml(p.img || 'images/logo.png')}" style="width:36px;height:36px;object-fit:contain;background:#fff;border-radius:4px;" onerror="this.onerror=null; this.src='images/logo.png';"></td>
+          <td><img src="${escapeHtml(p.img || 'images/logo.png')}" loading="lazy" decoding="async" style="width:36px;height:36px;object-fit:contain;background:#fff;border-radius:4px;" onerror="this.onerror=null; this.src='images/logo.png';"></td>
           <td><span class="card-sku">${escapeHtml(p.code)}</span></td>
           <td>${escapeHtml(p.desc.substring(0, 36))}...</td>
           <td>${escapeHtml(p.cat)}</td>
@@ -3243,12 +3258,16 @@
         saveProductsToStorage();
 
         if (supabaseClient) {
-          const fullPayload = {
+          const useCoreOnly = localStorage.getItem('GR_SUPABASE_CORE_SCHEMA') === '1';
+          const corePayload = {
             sku: code,
             name: desc,
             description: desc + (obs ? ` - Obs: ${obs}` : ''),
             application: app,
-            price: price,
+            price: price
+          };
+          const fullPayload = useCoreOnly ? corePayload : {
+            ...corePayload,
             stock_quantity: inStock ? 5 : 0,
             category_id: catId,
             image_url: img,
@@ -3256,16 +3275,12 @@
           };
           let { error: updErr } = await supabaseClient.from('products').update(fullPayload).eq('id', id);
 
-          // Fallback caso a tabela products no Supabase não possua colunas opcionais (ex: category_id, is_active, etc.)
-          if (updErr) {
-            const corePayload = {
-              sku: code,
-              name: desc,
-              description: desc + (obs ? ` - Obs: ${obs}` : ''),
-              application: app,
-              price: price
-            };
+          // Fallback único caso a tabela products no Supabase não possua colunas opcionais (memoriza para não repetir requisição dupla)
+          if (updErr && !useCoreOnly) {
             const retryRes = await supabaseClient.from('products').update(corePayload).eq('id', id);
+            if (!retryRes.error) {
+              localStorage.setItem('GR_SUPABASE_CORE_SCHEMA', '1');
+            }
             updErr = retryRes.error;
           }
 
@@ -3622,7 +3637,7 @@
         return `
           <tr>
             <td>
-              <img src="${escapeHtml(product.img || 'images/logo.png')}" style="width: 40px; height: 40px; object-fit: contain; background: white; border: 1px solid #E5E7EB; border-radius: 4px;" onerror="this.onerror=null; this.src='images/logo.png';">
+              <img src="${escapeHtml(product.img || 'images/logo.png')}" loading="lazy" decoding="async" style="width: 40px; height: 40px; object-fit: contain; background: white; border: 1px solid #E5E7EB; border-radius: 4px;" onerror="this.onerror=null; this.src='images/logo.png';">
             </td>
             <td>
               <strong style="display: block; color: #111827;">${escapeHtml(product.desc)}</strong>
