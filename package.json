@@ -2,27 +2,8 @@
   "name": "gr-auto-pecas-ecommerce",
   "version": "1.0.0",
   "private": true,
-  "description": "E-commerce Oficial da G&R Auto Peças integrado ao Supabase com Realtime",
+  "description": "E-commerce Oficial da G&R Auto Peças - Catálogo e Gestão com Supabase",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.45.0",
-    "lucide-react": "^0.446.0",
-    "next": "^14.2.13",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.12",
-    "typescript": "^5"
+    "build": "echo 'Site estático pronto para publicação no Vercel'"
   }
 }
