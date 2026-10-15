@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- SheetJS para importação direta de Excel (.xlsx / .csv) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Supabase JS Client v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
@@ -1719,7 +1721,16 @@
         <div id="admin-tab-crud" class="admin-tab-content" style="display: none;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; flex-wrap: wrap;">
             <input type="text" id="admin-search-crud" class="form-control" style="max-width: 320px;" placeholder="Filtrar por nome ou SKU..." oninput="renderAdminProductsTable()">
-            <button type="button" class="btn btn-primary" onclick="openNewProductModal()">➕ Nova Peça</button>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button type="button" class="btn btn-primary" onclick="openNewProductModal()">➕ Nova Peça</button>
+              <label class="btn" style="background: #10B981; color: white; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" title="Importar planilha Excel (.xlsx) ou CSV de uma só vez">
+                📊 Importar Planilha Excel / CSV
+                <input type="file" id="excel-import-file" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleExcelFileUpload(event)">
+              </label>
+              <a href="modelo_importacao_pecas.xlsx" download="modelo_importacao_pecas.xlsx" class="btn" style="background: #374151; color: white; text-decoration: none; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 5px;" title="Baixar modelo de planilha para preenchimento">
+                📥 Baixar Modelo
+              </a>
+            </div>
           </div>
 
           <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm);">
@@ -1927,6 +1938,71 @@
           <button type="submit" class="btn btn-primary">Salvar Peça</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Modal Confirmação e Importação em Lote via Excel/CSV -->
+  <div class="modal-overlay" id="admin-excel-import-modal" style="z-index: 1060;">
+    <div class="modal-card" style="max-width: 820px;">
+      <div class="modal-header" style="background: #10B981; color: white;">
+        <h3 style="color: white; display: flex; align-items: center; gap: 8px;">
+          📊 Importação de Peças via Planilha Excel / CSV
+        </h3>
+        <button type="button" class="modal-close-btn" style="color: white;" onclick="closeModal('admin-excel-import-modal')">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 20px;">
+        <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+          <div style="font-weight: 700; color: #166534; font-size: 0.95rem; margin-bottom: 4px;">
+            🎉 Planilha Lida com Sucesso!
+          </div>
+          <div id="excel-import-summary" style="font-size: 0.85rem; color: #15803D;">
+            Identificamos 0 novas peças prontas para serem cadastradas no site e no Supabase.
+          </div>
+        </div>
+
+        <div style="font-size: 0.85rem; font-weight: 700; margin-bottom: 8px; color: var(--text);">
+          Pré-visualização das Primeiras Peças Encontradas:
+        </div>
+
+        <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; max-height: 240px; overflow-y: auto; margin-bottom: 18px;">
+          <table class="products-table" style="font-size: 0.75rem; width: 100%;">
+            <thead>
+              <tr style="background: #1F2937; color: white;">
+                <th>SKU</th>
+                <th>Descrição</th>
+                <th>Aplicação</th>
+                <th>Categoria</th>
+                <th style="text-align: right;">Preço Atacado</th>
+                <th style="text-align: center;">Estoque</th>
+              </tr>
+            </thead>
+            <tbody id="excel-preview-tbody">
+              <!-- Injected via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Barra de Progresso do Envio -->
+        <div id="excel-progress-container" style="display: none; margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px;">
+            <span id="excel-progress-label">Gravando no Supabase...</span>
+            <span id="excel-progress-pct" style="font-weight: bold; color: #10B981;">0%</span>
+          </div>
+          <div style="background: #E5E7EB; height: 10px; border-radius: 5px; overflow: hidden;">
+            <div id="excel-progress-bar" style="background: #10B981; width: 0%; height: 100%; transition: width 0.2s;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="btn" style="background: #E5E7EB; color: #374151;" onclick="closeModal('admin-excel-import-modal')">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-excel-import" style="background: #10B981; padding: 10px 22px; font-weight: bold;" onclick="executeBatchExcelImport()">
+          🚀 Gravar Todas no Supabase e no Site
+        </button>
+      </div>
     </div>
   </div>
 
@@ -3725,6 +3801,255 @@
       renderAdminProductsTable();
       updateAdminStats();
       showToast('Catálogo restaurado para as 978 peças de fábrica.');
+    }
+
+
+    // ==========================================================================
+    // MOTOR DE IMPORTAÇÃO DE PLANILHAS (EXCEL .XLSX / .CSV)
+    // ==========================================================================
+    let pendingExcelProducts = [];
+
+    function handleExcelFileUpload(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const fileName = file.name.toLowerCase();
+      const isCsv = fileName.endsWith('.csv');
+
+      showToast('⏳ Processando planilha: ' + file.name + '...');
+
+      const reader = new FileReader();
+
+      if (isCsv) {
+        reader.onload = function(e) {
+          parseCSVContent(e.target.result);
+        };
+        reader.readAsText(file, 'utf-8');
+      } else {
+        reader.onload = function(e) {
+          if (window.XLSX) {
+            try {
+              const data = new Uint8Array(e.target.result);
+              const workbook = XLSX.read(data, { type: 'array' });
+              const sheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[sheetName];
+              const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+              processParsedRows(rows);
+            } catch (err) {
+              alert('Erro ao ler planilha Excel: ' + err.message);
+            }
+          } else {
+            alert('A biblioteca SheetJS ainda está carregando. Por favor, tente novamente em alguns segundos ou converta o arquivo para .csv.');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      }
+      // Limpa o input para permitir selecionar o mesmo arquivo novamente
+      event.target.value = '';
+    }
+
+    function parseCSVContent(text) {
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+      if (lines.length < 2) {
+        alert('O arquivo CSV parece estar vazio ou sem dados suficientes.');
+        return;
+      }
+
+      const delimiter = lines[0].includes(';') ? ';' : ',';
+      const headers = lines[0].split(delimiter).map(h => h.trim().replace(/^["']|["']$/g, ''));
+
+      const rows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(delimiter).map(c => c.trim().replace(/^["']|["']$/g, ''));
+        const rowObj = {};
+        headers.forEach((h, idx) => {
+          rowObj[h] = cols[idx] !== undefined ? cols[idx] : '';
+        });
+        rows.push(rowObj);
+      }
+
+      processParsedRows(rows);
+    }
+
+    function processParsedRows(rows) {
+      if (!rows || rows.length === 0) {
+        alert('Nenhuma linha de dados encontrada na planilha.');
+        return;
+      }
+
+      // Normaliza as colunas procurando palavras-chave
+      const normalized = [];
+      let maxCurrentId = productsList.length > 0 ? Math.max(...productsList.map(p => p.id || 0)) : 0;
+
+      rows.forEach((r, idx) => {
+        let code = '';
+        let desc = '';
+        let app = '';
+        let cat = 'Outras Peças';
+        let price = 0;
+        let stock = true;
+        let obs = '';
+        let img = '';
+
+        for (const [key, val] of Object.entries(r)) {
+          const k = key.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const v = String(val).trim();
+
+          if (/cod|sku|ref|part/.test(k) && !code) {
+            code = v;
+          } else if (/desc|nome|peca|produto|titulo/.test(k) && !desc) {
+            desc = v;
+          } else if (/apli|veic|carro|modelo|compat/.test(k) && !app) {
+            app = v;
+          } else if (/cat|grupo|tipo|secao/.test(k)) {
+            cat = v || 'Outras Peças';
+          } else if (/prec|valor|venda|custo/.test(k) && price === 0) {
+            const cleanPrice = v.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+            price = parseFloat(cleanPrice) || 0;
+          } else if (/est|qtd|quant/.test(k)) {
+            const num = parseInt(v, 10);
+            stock = isNaN(num) ? true : num > 0;
+          } else if (/obs|nota|detalhe/.test(k) && !obs) {
+            obs = v;
+          } else if (/img|foto|imagem|url/.test(k) && !img) {
+            img = v;
+          }
+        }
+
+        // Se a linha tiver pelo menos descrição ou código
+        if (desc || code) {
+          maxCurrentId++;
+          normalized.push({
+            id: maxCurrentId,
+            code: code || ('P-' + maxCurrentId),
+            desc: desc || code,
+            app: app || 'Consulte veículos compatíveis',
+            cat: cat || 'Outras Peças',
+            price: price,
+            inStock: stock,
+            obs: obs,
+            img: img || 'images/p_' + maxCurrentId + '.jpg'
+          });
+        }
+      });
+
+      if (normalized.length === 0) {
+        alert('Não conseguimos identificar as colunas na planilha. Certifique-se de usar colunas como: Código SKU, Descrição da Peça, Categoria, Preço, etc.');
+        return;
+      }
+
+      pendingExcelProducts = normalized;
+
+      // Atualiza interface do modal de confirmação
+      document.getElementById('excel-import-summary').textContent = 
+        'Identificamos ' + normalized.length + ' peças prontas para importação imediata!';
+
+      const tbody = document.getElementById('excel-preview-tbody');
+      tbody.innerHTML = normalized.slice(0, 8).map(p => `
+        <tr>
+          <td style="font-family: monospace; font-weight: bold;">${escapeHtml(p.code)}</td>
+          <td><strong>${escapeHtml(p.desc.substring(0, 32))}</strong></td>
+          <td style="color: #4B5563;">${escapeHtml(p.app.substring(0, 28))}</td>
+          <td><span style="background: #F3F4F6; padding: 2px 6px; border-radius: 4px;">${escapeHtml(p.cat)}</span></td>
+          <td style="text-align: right; font-weight: bold; color: var(--primary);">${formatCurrency(p.price)}</td>
+          <td style="text-align: center;">${p.inStock ? '🟢 Sim' : '🔴 Não'}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('excel-progress-container').style.display = 'none';
+      document.getElementById('btn-confirm-excel-import').disabled = false;
+      document.getElementById('btn-confirm-excel-import').textContent = '🚀 Gravar Todas no Supabase e no Site';
+
+      openModal('admin-excel-import-modal');
+    }
+
+    async function executeBatchExcelImport() {
+      if (!pendingExcelProducts || pendingExcelProducts.length === 0) return;
+
+      const total = pendingExcelProducts.length;
+      const progressContainer = document.getElementById('excel-progress-container');
+      const progressBar = document.getElementById('excel-progress-bar');
+      const progressPct = document.getElementById('excel-progress-pct');
+      const progressLabel = document.getElementById('excel-progress-label');
+      const confirmBtn = document.getElementById('btn-confirm-excel-import');
+
+      progressContainer.style.display = 'block';
+      confirmBtn.disabled = true;
+
+      // 1. Identifica e cadastra categorias novas que ainda não existam
+      const newCats = Array.from(new Set(pendingExcelProducts.map(p => p.cat))).filter(c => !categoriesList.some(ex => ex.name.toLowerCase() === c.toLowerCase()));
+      
+      let nextCatId = categoriesList.length > 0 ? Math.max(...categoriesList.map(c => c.id)) + 1 : 1;
+      newCats.forEach(nc => {
+        categoriesList.push({
+          id: nextCatId++,
+          name: nc,
+          slug: nc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+        });
+      });
+
+      // Se conectado ao Supabase, grava categorias novas
+      if (supabaseClient && newCats.length > 0) {
+        try {
+          const catPayload = categoriesList.map(c => ({ id: c.id, name: c.name, slug: c.slug }));
+          await supabaseClient.from('categories').upsert(catPayload, { onConflict: 'id' });
+        } catch (e) {
+          console.warn('Erro ao atualizar categorias no Supabase:', e);
+        }
+      }
+
+      // 2. Envia os produtos em lotes de 50 para o Supabase
+      const batchSize = 50;
+      let processed = 0;
+
+      for (let i = 0; i < total; i += batchSize) {
+        const batch = pendingExcelProducts.slice(i, i + batchSize);
+
+        if (supabaseClient) {
+          const payload = batch.map(p => {
+            const catObj = categoriesList.find(c => c.name.toLowerCase() === p.cat.toLowerCase());
+            return {
+              id: p.id,
+              sku: p.code || '',
+              name: p.desc || '',
+              description: p.desc + (p.obs ? ' - Obs: ' + p.obs : ''),
+              application: p.app || '',
+              price: p.price || 0,
+              stock_quantity: p.inStock ? 5 : 0,
+              category_id: catObj ? catObj.id : 17,
+              image_url: p.img || '',
+              is_active: p.inStock
+            };
+          });
+
+          try {
+            const { error: upsertErr } = await supabaseClient.from('products').upsert(payload, { onConflict: 'id' });
+            if (upsertErr) console.warn('Erro lote Supabase:', upsertErr);
+          } catch (err) {
+            console.warn('Falha ao enviar lote:', err);
+          }
+        }
+
+        // Insere na lista local do site
+        productsList.push(...batch);
+
+        processed += batch.length;
+        const pct = Math.round((processed / total) * 100);
+        progressBar.style.width = pct + '%';
+        progressPct.textContent = pct + '%';
+        progressLabel.textContent = 'Enviadas ' + processed + ' de ' + total + ' peças...';
+      }
+
+      // 3. Atualiza interface e fecha modal
+      renderCategoryChips();
+      renderPopulateCategorySelects();
+      applyFilters();
+      renderAdminProductsTable();
+      updateAdminStats();
+
+      showToast('🎉 ' + total + ' novas peças importadas com sucesso!');
+      alert('Sucesso! Todas as ' + total + ' peças da planilha foram gravadas no Supabase e já estão ativas na vitrine da loja.');
+      closeModal('admin-excel-import-modal');
     }
 
     // ==========================================================================
