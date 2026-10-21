@@ -174,6 +174,129 @@
     }
     .search-clear-btn:hover { color: #fff; }
 
+    /* Smart Search Autocomplete Dropdown */
+    .search-suggestions-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      background: #18202F;
+      border: 1px solid #374151;
+      border-radius: 10px;
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+      z-index: 1005;
+      display: none;
+      max-height: 440px;
+      overflow-y: auto;
+      color: #F9FAFB;
+    }
+    .search-suggestions-dropdown.open {
+      display: block;
+    }
+    .search-dropdown-section {
+      padding: 10px 12px;
+      border-bottom: 1px solid #283244;
+    }
+    .search-dropdown-section:last-child {
+      border-bottom: none;
+    }
+    .search-dropdown-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #9CA3AF;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .search-quick-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .search-quick-tag {
+      background: #253042;
+      color: #E5E7EB;
+      border: 1px solid #374151;
+      border-radius: 16px;
+      padding: 4px 10px;
+      font-size: 0.76rem;
+      cursor: pointer;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .search-quick-tag:hover {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .search-suggestion-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .search-suggestion-item:hover,
+    .search-suggestion-item.active {
+      background: #253042;
+    }
+    .search-suggestion-thumb {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      background: #fff;
+      border-radius: 6px;
+      padding: 2px;
+      flex-shrink: 0;
+    }
+    .search-suggestion-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .search-suggestion-name {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #F9FAFB;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .search-suggestion-meta {
+      font-size: 0.72rem;
+      color: #9CA3AF;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .search-suggestion-price {
+      font-family: 'Chakra Petch', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #FF6B68;
+      white-space: nowrap;
+    }
+    .smart-search-banner {
+      background: #FFFBEB;
+      border: 1px solid #FDE68A;
+      color: #92400E;
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
     /* Header Actions */
     .header-actions {
       display: flex;
@@ -1270,12 +1393,13 @@
       </a>
 
       <!-- Search Bar -->
-      <div class="header-search-box">
+      <div class="header-search-box" id="header-search-box">
         <div class="search-input-wrap">
           <span class="search-icon">🔍</span>
-          <input type="text" id="global-search-input" class="search-input" placeholder="Buscar por peça, código SKU, modelo do carro ou compatibilidade..." autocomplete="off">
-          <button type="button" id="search-clear-btn" class="search-clear-btn">&times;</button>
+          <input type="text" id="global-search-input" class="search-input" placeholder="Busque por peça, apelido (ex: balança, milha), carro, ano ou código..." autocomplete="off">
+          <button type="button" id="search-clear-btn" class="search-clear-btn" title="Limpar busca">&times;</button>
         </div>
+        <div id="search-suggestions-dropdown" class="search-suggestions-dropdown"></div>
       </div>
 
       <!-- Actions -->
@@ -1390,6 +1514,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Smart Search Feedback Banner -->
+    <div id="smart-search-banner" class="smart-search-banner"></div>
 
     <!-- Products Container (Grid View) -->
     <div id="products-grid" class="products-grid">
@@ -2515,10 +2642,676 @@
       window.scrollTo({ top: 400, behavior: 'smooth' });
     }
 
+    // ==========================================================================
+    // MOTOR DE BUSCA INTELIGENTE (SINÔNIMOS, FONÉTICA, PLURAIS, ANOS E TOLERÂNCIA A ERROS)
+    // ==========================================================================
+    const SEARCH_STOP_WORDS = new Set([
+      'de', 'da', 'do', 'das', 'dos', 'com', 'sem', 'para', 'por', 'em', 'no', 'na',
+      'nos', 'nas', 'ao', 'aos', 'um', 'uma', 'uns', 'umas', 'e', 'ou', 'ate', 'apos',
+      'a', 'o', 'as', 'os', 'que', 'se', 'c', 's', 'ano', 'anos', 'modelo', 'carro', 'veiculo', 'peca', 'pecas'
+    ]);
+
+    // Correções diretas de grafias comuns (no catálogo ou digitadas pelo cliente)
+    const DIRECT_TYPO_MAP = {
+      'embreage': 'embreagem',
+      'embriagem': 'embreagem',
+      'embreajen': 'embreagem',
+      'cilindor': 'cilindro',
+      'intercoller': 'intercooler',
+      'interculer': 'intercooler',
+      'intercoler': 'intercooler',
+      'savero': 'saveiro',
+      'passati': 'passat',
+      'passsat': 'passat',
+      'pasat': 'passat',
+      'pathifinder': 'pathfinder',
+      'patfinder': 'pathfinder',
+      'cintroen': 'citroen',
+      'citroem': 'citroen',
+      'pajeiro': 'pajero',
+      'pagero': 'pajero',
+      'filder': 'fielder',
+      'celler': 'celer',
+      'tenso': 'tensor',
+      'autuador': 'atuador',
+      'amortessedor': 'amortecedor',
+      'homocinetica': 'homocinetica',
+      'omocinetica': 'homocinetica',
+      'mocinetica': 'homocinetica',
+      'hiunday': 'hyundai',
+      'hyunday': 'hyundai',
+      'hundai': 'hyundai',
+      'hyndai': 'hyundai',
+      'mitsubichi': 'mitsubishi',
+      'mitsubish': 'mitsubishi',
+      'pegeout': 'peugeot',
+      'peugout': 'peugeot',
+      'pejo': 'peugeot',
+      'renalt': 'renault',
+      'reno': 'renault',
+      'sangyong': 'ssangyong',
+      'susuki': 'suzuki',
+      'tucsom': 'tucson',
+      'tukson': 'tucson',
+      'tigo': 'tiggo',
+      'sielo': 'cielo',
+      'jimmy': 'jimny',
+      'jinny': 'jimny',
+      'lifam': 'lifan',
+      'cherry': 'chery',
+      'shery': 'chery',
+      'frelander': 'freelander',
+      'evoke': 'evoque',
+      'discoveri': 'discovery',
+      'carcassa': 'carcaca',
+      'vauvula': 'valvula',
+      'bielata': 'bieleta',
+      'buxa': 'bucha',
+      'cochin': 'coxim',
+      'coxin': 'coxim'
+    };
+
+    // Grupos de sinônimos automotivos (termos populares de mecânicos/clientes <-> termos técnicos do catálogo)
+    const AUTO_SYNONYM_GROUPS = [
+      ['vw', 'volkswagen', 'volks'],
+      ['gm', 'chevrolet', 'chevy'],
+      ['mb', 'mercedes', 'mercedesbenz', 'benz'],
+      ['landrover', 'rangerover', 'rover'],
+      ['chery', 'caoa'],
+      ['jac', 'jacmotors'],
+      ['bandeja', 'balanca', 'leque', 'braco', 'oscilante', 'suspensao'],
+      ['coxim', 'calco', 'suporte', 'apoio', 'limitador', 'torque'],
+      ['embreagem', 'plato', 'disco', 'colar'],
+      ['atuador', 'cilindro', 'mestre', 'escravo', 'auxiliar', 'pedal', 'burrinho'],
+      ['dh', 'direcao', 'hidraulica'],
+      ['dagua', 'agua', 'arrefecimento'],
+      ['oleo', 'lubrificacao'],
+      ['radiador', 'resfriador', 'trocador', 'calor', 'intercooler'],
+      ['reservatorio', 'expansao', 'vaso', 'tanque', 'pote'],
+      ['valvula', 'termostatica', 'termostato', 'carcaca', 'cavalete', 'flange'],
+      ['antichama', 'pcv', 'separador', 'suspiro', 'respiro', 'diafragma'],
+      ['tampa', 'cabecote', 'comando', 'valvula'],
+      ['coletor', 'admissao', 'escape'],
+      ['cubo', 'rolamento', 'roda'],
+      ['tensor', 'esticador', 'polia', 'guia'],
+      ['corrente', 'distribuicao', 'kit', 'sincronismo'],
+      ['farol', 'lanterna', 'milha', 'neblina', 'auxiliar', 'sinaleira', 'refletor', 'led'],
+      ['mangueira', 'cano', 'tubo', 'duto', 'conduto'],
+      ['homocinetica', 'semieixo', 'trizeta', 'tulipa', 'ponteira'],
+      ['parachoque', 'choque', 'grade', 'moldura', 'friso', 'acabamento', 'spoiler'],
+      ['parabarro', 'barro', 'lameiro'],
+      ['dianteiro', 'diant', 'frontal', 'frente'],
+      ['traseiro', 'tras'],
+      ['direito', 'dir', 'ld', 'passageiro', 'carona'],
+      ['esquerdo', 'esq', 'le', 'motorista', 'condutor'],
+      ['cambio', 'transmissao', 'marcha', 'caixa'],
+      ['freio', 'estacionamento', 'mao'],
+      ['pivo', 'bucha', 'bieleta', 'terminal', 'axial'],
+      ['ventoinha', 'eletroventilador', 'ventilador', 'helice', 'defletor']
+    ];
+
+    // Mapa invertido de sinônimos para consulta O(1)
+    const SYNONYM_LOOKUP = new Map();
+    AUTO_SYNONYM_GROUPS.forEach(group => {
+      group.forEach(word => {
+        if (!SYNONYM_LOOKUP.has(word)) {
+          SYNONYM_LOOKUP.set(word, new Set());
+        }
+        const set = SYNONYM_LOOKUP.get(word);
+        group.forEach(other => {
+          if (other !== word) set.add(other);
+        });
+      });
+    });
+
+    const POPULAR_SEARCH_TAGS = [
+      { label: '⚙️ Kit Embreagem', query: 'kit embreagem' },
+      { label: '🛞 Cubo de Roda', query: 'cubo roda' },
+      { label: '💧 Bomba D\'Água', query: 'bomba agua' },
+      { label: '❄️ Radiador / Intercooler', query: 'radiador' },
+      { label: '🔧 Bandeja / Balança', query: 'bandeja' },
+      { label: '🔩 Coxim Motor', query: 'coxim' },
+      { label: '🌡️ Válvula / Carcaça', query: 'valvula termostatica' },
+      { label: '🚗 Linha JAC', query: 'jac' },
+      { label: '🚙 Land Rover / Evoque', query: 'land rover' },
+      { label: '🏎️ BMW / Mercedes', query: 'bmw' }
+    ];
+
+    function normalizeSearchText(str) {
+      if (!str) return '';
+      let s = String(str)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+      // Normaliza expressões compostas e abreviações técnicas antes de separar palavras
+      s = s
+        .replace(/\bd\s*[\.\']?\s*agua\b/g, 'dagua agua')
+        .replace(/\bd\s*\.\s*h\.?\b/g, 'dh direcao hidraulica')
+        .replace(/\bc\s*\/\s*/g, 'com ')
+        .replace(/\bs\s*\/\s*/g, 'sem ')
+        .replace(/\bpara[\s\-]+choques?\b/g, 'parachoque choque')
+        .replace(/\bpara[\s\-]+barros?\b/g, 'parabarro barro')
+        .replace(/\bpara[\s\-]+brisas?\b/g, 'parabrisa')
+        .replace(/\bpara[\s\-]+lamas?\b/g, 'paralama')
+        .replace(/\bsemi[\s\-]+eixos?\b/g, 'semieixo')
+        .replace(/\banti[\s\-]+chamas?\b/g, 'antichama')
+        .replace(/\bsanta[\s\-]+fe\b/g, 'santafe santa fe')
+        .replace(/\bvera[\s\-]+cruz\b/g, 'veracruz vera cruz')
+        .replace(/\bland[\s\-]+rover\b/g, 'landrover land rover')
+        .replace(/\branger?[\s\-]+rover\b/g, 'rangerover range rover')
+        .replace(/\bcr[\s\-]+v\b/g, 'crv')
+        .replace(/\bhr[\s\-]+v\b/g, 'hrv')
+        .replace(/\bx[\s\-]+trail\b/g, 'xtrail')
+        .replace(/\bs[\s\-]+10\b/g, 's10')
+        .replace(/\bl[\s\-]+200\b/g, 'l200')
+        .replace(/\bix[\s\-]+35\b/g, 'ix35')
+        .replace(/\bhb[\s\-]+20\b/g, 'hb20');
+
+      return s.replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+
+    function stemToken(word) {
+      if (!word || word.length <= 2) return word;
+      let w = DIRECT_TYPO_MAP[word] || word;
+      if (w.length <= 3) return w;
+
+      // Plurais em português
+      if (w.endsWith('oes') || w.endsWith('aes')) {
+        w = w.slice(0, -3) + 'ao';
+      } else if (w.endsWith('ois')) {
+        w = w.slice(0, -3) + 'ol'; // farois -> farol
+      } else if (w.endsWith('eis')) {
+        w = w.slice(0, -3) + 'el';
+      } else if (w.endsWith('ais') && w.length > 4) {
+        w = w.slice(0, -3) + 'al';
+      } else if (w.endsWith('ns') && w.length > 4) {
+        w = w.slice(0, -2) + 'm'; // coxins -> coxim
+      } else if (w.endsWith('res') && w.length > 4) {
+        w = w.slice(0, -2); // radiadores -> radiador, atuadores -> atuador, tensores -> tensor
+      } else if (w.endsWith('s') && !w.endsWith('ss') && !/^(atlas|focus|prius|virtus|nivus|cronos|yaris|taos|logan|lancer|celer)$/.test(w)) {
+        w = w.slice(0, -1);
+      }
+
+      w = DIRECT_TYPO_MAP[w] || w;
+
+      // Unificação de gênero em adjetivos automotivos comuns (dianteira/dianteiro, traseira/traseiro, direita/direito, esquerda/esquerdo, eletrica/eletrico, termostatica/termostatico)
+      if (/^(dianteir|traseir|direit|esquerd|eletric|hidraulic|termostatic|automatic|mecanic|complet|intern|extern|inferi|superi)a$/.test(w)) {
+        w = w.slice(0, -1) + 'o';
+      }
+
+      return w;
+    }
+
+    function phoneticKey(word) {
+      if (!word || word.length <= 2) return word;
+      let w = stemToken(word);
+      if (/^\d+$/.test(w)) return w;
+
+      w = w
+        .replace(/^h/, '')
+        .replace(/y/g, 'i')
+        .replace(/w/g, 'v')
+        .replace(/ph/g, 'f')
+        .replace(/th/g, 't')
+        .replace(/ch|sh/g, 'x')
+        .replace(/ce/g, 'se')
+        .replace(/ci/g, 'si')
+        .replace(/ge/g, 'je')
+        .replace(/gi/g, 'ji')
+        .replace(/ca/g, 'ka')
+        .replace(/co/g, 'ko')
+        .replace(/cu/g, 'ku')
+        .replace(/qu/g, 'k')
+        .replace(/c/g, 'k')
+        .replace(/z$/g, 's')
+        .replace(/m$/g, 'n')
+        .replace(/([a-z])\1+/g, '$1');
+
+      return w;
+    }
+
+    // Extrai todos os anos intermediários de faixas como "2008 a 2014", "07/11", "10-16", "2012 em diante", "após 2008"
+    function extractExpandedYears(text) {
+      if (!text) return [];
+      const years = new Set();
+      const s = String(text)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+      const toFullYear = (numStr) => {
+        const n = parseInt(numStr, 10);
+        if (isNaN(n)) return null;
+        if (numStr.length === 4 && n >= 1980 && n <= 2030) return n;
+        if (numStr.length === 2) {
+          return n <= 30 ? (2000 + n) : (n >= 80 ? 1900 + n : null);
+        }
+        return null;
+      };
+
+      // Faixas fechadas: "2007 até 2013", "2012 a 2016", "07 a 11", "07/11", "10-16"
+      const rangeRegex = /(?<![\.\dxv])(\d{2}|\d{4})\s*(?:a|ate|à|-|\/)\s*(\d{2}|\d{4})(?![\.\dxv])/g;
+      let match;
+      while ((match = rangeRegex.exec(s)) !== null) {
+        const y1 = toFullYear(match[1]);
+        const y2 = toFullYear(match[2]);
+        if (y1 && y2 && y2 >= y1 && (y2 - y1) <= 25) {
+          for (let y = y1; y <= y2; y++) {
+            years.add(String(y));
+          }
+        }
+      }
+
+      // Faixas abertas: "2011 em diante", "2013/...", "2010...", "após 2008"
+      const openForwardRegex = /(\b(?:199\d|20[0-2]\d))\s*(?:em\s+diante|diante|\.{2,}|\/\s*\.{0,3})(?!\d)/g;
+      while ((match = openForwardRegex.exec(s)) !== null) {
+        const y1 = parseInt(match[1], 10);
+        const yEnd = Math.min(2026, y1 + 10);
+        for (let y = y1; y <= yEnd; y++) {
+          years.add(String(y));
+        }
+      }
+
+      const afterRegex = /\b(?:apos|a\s+partir\s+de)\s+(199\d|20[0-2]\d)\b/g;
+      while ((match = afterRegex.exec(s)) !== null) {
+        const y1 = parseInt(match[1], 10);
+        const yEnd = Math.min(2026, y1 + 10);
+        for (let y = y1; y <= yEnd; y++) {
+          years.add(String(y));
+        }
+      }
+
+      return Array.from(years);
+    }
+
+    // Distância de edição Damerau-Levenshtein (tolera letras trocadas, faltando ou sobrando)
+    function damerauLevenshtein(a, b, maxDist = 2) {
+      if (a === b) return 0;
+      const lenA = a.length;
+      const lenB = b.length;
+      if (Math.abs(lenA - lenB) > maxDist) return maxDist + 1;
+
+      const dp = Array.from({ length: lenA + 1 }, () => new Array(lenB + 1).fill(0));
+      for (let i = 0; i <= lenA; i++) dp[i][0] = i;
+      for (let j = 0; j <= lenB; j++) dp[0][j] = j;
+
+      for (let i = 1; i <= lenA; i++) {
+        let rowMin = maxDist + 1;
+        for (let j = 1; j <= lenB; j++) {
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          let val = Math.min(
+            dp[i - 1][j] + 1,      // deleção
+            dp[i][j - 1] + 1,      // inserção
+            dp[i - 1][j - 1] + cost // substituição
+          );
+          // transposição de letras adjacentes (ex: cilindor <-> cilindro)
+          if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+            val = Math.min(val, dp[i - 2][j - 2] + 1);
+          }
+          dp[i][j] = val;
+          if (val < rowMin) rowMin = val;
+        }
+        if (rowMin > maxDist) return maxDist + 1;
+      }
+      return dp[lenA][lenB];
+    }
+
+    // Constrói e memoriza o índice de busca de cada produto para velocidade instantânea
+    function getProductSearchIndex(p) {
+      const cacheKey = `${p.id}|${p.code}|${p.desc}|${p.app}|${p.cat}|${p.obs}`;
+      if (p._searchIdx && p._searchCacheKey === cacheKey) {
+        return p._searchIdx;
+      }
+
+      const compactCode = String(p.code || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const titleNorm = normalizeSearchText(p.desc);
+      const appNorm = normalizeSearchText(p.app);
+      const catNorm = normalizeSearchText(p.cat);
+      const obsNorm = normalizeSearchText(p.obs);
+      const codeNorm = normalizeSearchText(p.code);
+
+      const expandedYears = extractExpandedYears(`${p.app || ''} ${p.desc || ''}`);
+      const fullNorm = `${titleNorm} ${codeNorm} ${appNorm} ${catNorm} ${obsNorm} ${expandedYears.join(' ')}`.trim();
+
+      const rawTokens = fullNorm.split(/\s+/).filter(Boolean);
+      const tokens = Array.from(new Set(rawTokens));
+      const titleStems = new Set(titleNorm.split(/\s+/).filter(Boolean).map(stemToken));
+      const appStems = new Set(appNorm.split(/\s+/).filter(Boolean).map(stemToken));
+      const catStems = new Set(catNorm.split(/\s+/).filter(Boolean).map(stemToken));
+
+      const stems = new Set();
+      const stemArray = [];
+      const phonetics = new Set();
+      const synonyms = new Set();
+
+      tokens.forEach(tok => {
+        const st = stemToken(tok);
+        stems.add(st);
+        stems.add(tok);
+        if (st.length >= 3) stemArray.push(st);
+        phonetics.add(phoneticKey(st));
+
+        // Expande sinônimos do token e do stem
+        [tok, st].forEach(key => {
+          const synSet = SYNONYM_LOOKUP.get(key);
+          if (synSet) {
+            synSet.forEach(syn => {
+              synonyms.add(syn);
+              synonyms.add(stemToken(syn));
+            });
+          }
+        });
+      });
+
+      p._searchCacheKey = cacheKey;
+      p._searchIdx = {
+        compactCode,
+        titleNorm,
+        appNorm,
+        catNorm,
+        fullNorm,
+        tokens,
+        stems,
+        stemArray,
+        titleStems,
+        appStems,
+        catStems,
+        phonetics,
+        synonyms
+      };
+      return p._searchIdx;
+    }
+
+    function tokenizeQuery(rawQuery) {
+      const norm = normalizeSearchText(rawQuery);
+      if (!norm) return [];
+      const allWords = norm.split(/\s+/).filter(Boolean);
+      const filtered = allWords.filter(w => !SEARCH_STOP_WORDS.has(w));
+      return filtered.length > 0 ? filtered : allWords;
+    }
+
+    // Avalia o grau de correspondência de um produto com a busca do usuário
+    function scoreProductForQuery(p, rawQuery, queryTokens, compactQuery) {
+      const idx = getProductSearchIndex(p);
+      let totalScore = 0;
+      let matchedTokens = 0;
+
+      // 1. Match direto por código SKU sem pontuação (ex: "527303s200" encontra "52730-3S200")
+      if (compactQuery.length >= 2 && idx.compactCode.includes(compactQuery)) {
+        totalScore += (idx.compactCode === compactQuery) ? 250 : 160;
+        if (queryTokens.length === 1) {
+          return { matched: true, isFullMatch: true, score: totalScore + (p.inStock ? 8 : 0) };
+        }
+      }
+
+      // 2. Frase exata contida na descrição ou aplicação
+      const normPhrase = queryTokens.join(' ');
+      if (normPhrase.length >= 3) {
+        if (idx.titleNorm.includes(normPhrase)) totalScore += 65;
+        else if (idx.appNorm.includes(normPhrase)) totalScore += 50;
+      }
+
+      // 3. Avaliação individual de cada termo da busca (independente da ordem)
+      for (const qTok of queryTokens) {
+        const qStem = stemToken(qTok);
+        const qPhon = phoneticKey(qStem);
+        const qCompact = qTok.replace(/[^a-z0-9]/g, '');
+
+        let tokenScore = 0;
+
+        // A. Match exato ou stem no título, aplicação, categoria ou código
+        if (idx.titleStems.has(qStem) || idx.titleStems.has(qTok)) {
+          tokenScore = 55;
+        } else if (idx.appStems.has(qStem) || idx.appStems.has(qTok)) {
+          tokenScore = 48;
+        } else if (idx.catStems.has(qStem) || idx.catStems.has(qTok)) {
+          tokenScore = 42;
+        } else if (idx.stems.has(qStem) || idx.stems.has(qTok)) {
+          tokenScore = 40;
+        } else if (qCompact.length >= 2 && idx.compactCode.includes(qCompact)) {
+          tokenScore = 50;
+        }
+
+        // B. Match por prefixo / substring parcial (ex: "amort" -> "amortecedor", "radiad" -> "radiador")
+        if (tokenScore === 0 && qStem.length >= 3) {
+          for (const st of idx.stemArray) {
+            if (st.startsWith(qStem) || (qStem.length >= 4 && st.includes(qStem)) || (st.length >= 4 && qStem.startsWith(st))) {
+              tokenScore = 36;
+              break;
+            }
+          }
+        }
+
+        // C. Match por sinônimo automotivo (ex: "balança" -> "bandeja", "milha" -> "farol auxiliar", "vw" -> "volkswagen")
+        if (tokenScore === 0) {
+          if (idx.synonyms.has(qStem) || idx.synonyms.has(qTok)) {
+            tokenScore = 34;
+          }
+        }
+
+        // D. Match fonético em português (ex: "hiunday" -> "hyundai", "omocinetica" -> "homocinetica", "celer" -> "celler")
+        if (tokenScore === 0 && qPhon.length >= 3 && idx.phonetics.has(qPhon)) {
+          tokenScore = 32;
+        }
+
+        // E. Match aproximado (Fuzzy Damerau-Levenshtein) para erros de digitação
+        if (tokenScore === 0 && qStem.length >= 4 && !/^\d+$/.test(qStem)) {
+          const maxAllowedDist = qStem.length >= 7 ? 2 : 1;
+          let bestDist = maxAllowedDist + 1;
+
+          for (const st of idx.stemArray) {
+            if (st.length < 3 || /^\d+$/.test(st)) continue;
+            const d = damerauLevenshtein(qStem, st, maxAllowedDist);
+            if (d < bestDist) {
+              bestDist = d;
+              if (bestDist === 1) break;
+            }
+          }
+
+          if (bestDist <= maxAllowedDist) {
+            tokenScore = bestDist === 1 ? 26 : 18;
+          }
+        }
+
+        if (tokenScore > 0) {
+          matchedTokens++;
+          totalScore += tokenScore;
+        }
+      }
+
+      if (matchedTokens === 0) {
+        return { matched: false, isFullMatch: false, score: 0 };
+      }
+
+      const isFullMatch = matchedTokens === queryTokens.length;
+      const minRequiredPartial = queryTokens.length <= 2
+        ? queryTokens.length - 1
+        : Math.ceil(queryTokens.length * 0.6);
+      const isAcceptablePartial = queryTokens.length >= 2 && matchedTokens >= minRequiredPartial && totalScore >= 38;
+
+      if (!isFullMatch && !isAcceptablePartial) {
+        return { matched: false, isFullMatch: false, score: 0 };
+      }
+
+      // Bônus proporcional à cobertura de termos e disponibilidade em estoque
+      const coverageBonus = Math.round((matchedTokens / queryTokens.length) * 40);
+      const stockBonus = p.inStock ? 6 : 0;
+
+      return {
+        matched: true,
+        isFullMatch,
+        matchedTokens,
+        score: totalScore + coverageBonus + stockBonus
+      };
+    }
+
+    // Executa a busca inteligente sobre uma lista de produtos
+    function searchProductsSmart(sourceList, rawQuery, filterFn = null) {
+      const baseFiltered = filterFn ? sourceList.filter(filterFn) : [...sourceList];
+      const trimmed = (rawQuery || '').trim();
+      if (!trimmed) {
+        return { results: baseFiltered, isApproximate: false };
+      }
+
+      const queryTokens = tokenizeQuery(trimmed);
+      const compactQuery = trimmed.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+
+      if (queryTokens.length === 0 && !compactQuery) {
+        return { results: baseFiltered, isApproximate: false };
+      }
+
+      const fullMatches = [];
+      const partialMatches = [];
+
+      for (const p of baseFiltered) {
+        const res = scoreProductForQuery(p, trimmed, queryTokens, compactQuery);
+        if (res.matched) {
+          if (res.isFullMatch) {
+            fullMatches.push({ product: p, score: res.score });
+          } else {
+            partialMatches.push({ product: p, score: res.score });
+          }
+        }
+      }
+
+      fullMatches.sort((a, b) => b.score - a.score);
+      partialMatches.sort((a, b) => b.score - a.score);
+
+      if (fullMatches.length > 0) {
+        return {
+          results: fullMatches.map(m => m.product),
+          isApproximate: false
+        };
+      }
+
+      return {
+        results: partialMatches.map(m => m.product),
+        isApproximate: partialMatches.length > 0
+      };
+    }
+
+    function selectQuickSearch(term) {
+      const input = document.getElementById('global-search-input');
+      const clearBtn = document.getElementById('search-clear-btn');
+      const dropdown = document.getElementById('search-suggestions-dropdown');
+      if (input) input.value = term;
+      if (clearBtn) clearBtn.style.display = term ? 'block' : 'none';
+      if (dropdown) dropdown.classList.remove('open');
+      searchQuery = term.trim().toLowerCase();
+      displayedCount = PAGE_CHUNK;
+      applyFilters();
+      window.scrollTo({ top: 380, behavior: 'smooth' });
+    }
+
+    function renderSearchSuggestionsDropdown(rawVal) {
+      const dropdown = document.getElementById('search-suggestions-dropdown');
+      if (!dropdown) return;
+
+      const q = (rawVal || '').trim();
+
+      // Se o campo estiver vazio, mostra buscas rápidas populares e dicas
+      if (!q) {
+        dropdown.innerHTML = `
+          <div class="search-dropdown-section">
+            <div class="search-dropdown-title">
+              <span>⚡ Buscas Rápidas & Populares</span>
+              <span style="font-weight: 400; text-transform: none;">Clique para filtrar</span>
+            </div>
+            <div class="search-quick-tags">
+              ${POPULAR_SEARCH_TAGS.map(t => `
+                <button type="button" class="search-quick-tag" onclick="selectQuickSearch('${escapeHtml(t.query)}')">
+                  ${escapeHtml(t.label)}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="search-dropdown-section" style="background: rgba(255,255,255,0.02); font-size: 0.74rem; color: #9CA3AF;">
+            💡 <strong>Dica:</strong> Você pode buscar pelo nome popular (ex: <em>balança, milha, burrinho, calço</em>), carro + ano (ex: <em>sentra 2010, tiggo, crv 2009</em>) ou parte do código SKU.
+          </div>
+        `;
+        dropdown.classList.add('open');
+        return;
+      }
+
+      // Busca instantânea para o autocomplete
+      const { results, isApproximate } = searchProductsSmart(productsList, q);
+      const topProducts = results.slice(0, 6);
+
+      // Categorias relacionadas aos resultados encontrados
+      const matchedCats = Array.from(new Set(results.slice(0, 25).map(p => p.cat))).slice(0, 4);
+
+      if (topProducts.length === 0) {
+        dropdown.innerHTML = `
+          <div class="search-dropdown-section">
+            <div style="font-size: 0.82rem; color: #D1D5DB; margin-bottom: 8px;">
+              Nenhuma peça exata para "<strong>${escapeHtml(q)}</strong>". Experimente uma busca rápida:
+            </div>
+            <div class="search-quick-tags">
+              ${POPULAR_SEARCH_TAGS.slice(0, 6).map(t => `
+                <button type="button" class="search-quick-tag" onclick="selectQuickSearch('${escapeHtml(t.query)}')">
+                  ${escapeHtml(t.label)}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        dropdown.classList.add('open');
+        return;
+      }
+
+      let html = '';
+
+      if (matchedCats.length > 0) {
+        html += `
+          <div class="search-dropdown-section">
+            <div class="search-dropdown-title">
+              <span>📂 Categorias Relacionadas</span>
+            </div>
+            <div class="search-quick-tags">
+              ${matchedCats.map(catName => `
+                <button type="button" class="search-quick-tag" onclick="filterByCategory('${escapeHtml(catName)}'); document.getElementById('search-suggestions-dropdown').classList.remove('open');">
+                  📦 ${escapeHtml(catName)}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      html += `
+        <div class="search-dropdown-section">
+          <div class="search-dropdown-title">
+            <span>${isApproximate ? '💡 Sugestões Aproximadas' : '🔍 Peças Encontradas'} (${results.length})</span>
+            <span style="font-weight: 400; text-transform: none; cursor: pointer; color: #FF6B68;" onclick="document.getElementById('search-suggestions-dropdown').classList.remove('open'); window.scrollTo({ top: 380, behavior: 'smooth' });">Ver todas ↓</span>
+          </div>
+          ${topProducts.map(p => `
+            <div class="search-suggestion-item" onclick="document.getElementById('search-suggestions-dropdown').classList.remove('open'); openProductDetailModal(${p.id});">
+              <img src="${escapeHtml(p.img || 'images/logo.png')}" class="search-suggestion-thumb" alt="" loading="lazy" onerror="this.onerror=null; this.src='images/logo.png';">
+              <div class="search-suggestion-info">
+                <div class="search-suggestion-name">${escapeHtml(p.desc)}</div>
+                <div class="search-suggestion-meta">SKU: ${escapeHtml(p.code || 'S/N')} • ${escapeHtml(p.app || p.cat)}</div>
+              </div>
+              <div class="search-suggestion-price">${formatCurrency(p.price)}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      dropdown.innerHTML = html;
+      dropdown.classList.add('open');
+    }
+
     function setupSearchDebounce() {
       const input = document.getElementById('global-search-input');
       const clearBtn = document.getElementById('search-clear-btn');
+      const dropdown = document.getElementById('search-suggestions-dropdown');
+      const searchBox = document.getElementById('header-search-box');
       let timeout = null;
+
+      input.addEventListener('focus', () => {
+        renderSearchSuggestionsDropdown(input.value);
+      });
 
       input.addEventListener('input', () => {
         clearTimeout(timeout);
@@ -2527,7 +3320,18 @@
           searchQuery = input.value.trim().toLowerCase();
           displayedCount = PAGE_CHUNK;
           applyFilters();
-        }, 150);
+          renderSearchSuggestionsDropdown(input.value);
+        }, 120);
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          if (dropdown) dropdown.classList.remove('open');
+          input.blur();
+        } else if (e.key === 'Enter') {
+          if (dropdown) dropdown.classList.remove('open');
+          window.scrollTo({ top: 380, behavior: 'smooth' });
+        }
       });
 
       clearBtn.addEventListener('click', () => {
@@ -2536,7 +3340,14 @@
         searchQuery = '';
         displayedCount = PAGE_CHUNK;
         applyFilters();
+        renderSearchSuggestionsDropdown('');
         input.focus();
+      });
+
+      document.addEventListener('click', (e) => {
+        if (searchBox && !searchBox.contains(e.target)) {
+          if (dropdown) dropdown.classList.remove('open');
+        }
       });
     }
 
@@ -2547,20 +3358,34 @@
       const sortSelect = document.getElementById('filter-sort');
       sortBy = sortSelect ? sortSelect.value : 'default';
 
-      let filtered = productsList.filter(p => {
-        // Categoria
+      // Filtro base de categoria e estoque
+      const baseFilter = (p) => {
         if (activeCategory !== 'all' && p.cat !== activeCategory) return false;
-        // Apenas em estoque
         if (inStockOnly && !p.inStock) return false;
-        // Busca textual
-        if (searchQuery) {
-          const haystack = `${p.desc} ${p.code} ${p.app} ${p.cat} ${p.obs}`.toLowerCase();
-          if (!haystack.includes(searchQuery)) return false;
-        }
         return true;
-      });
+      };
 
-      // Ordenação
+      let searchResult = searchProductsSmart(productsList, searchQuery, baseFilter);
+      let filtered = searchResult.results;
+      let isApproximate = searchResult.isApproximate;
+      let searchedAllCategoriesFallback = false;
+
+      // Se o cliente estava com uma categoria selecionada, digitou uma busca e não achou nada naquela categoria,
+      // busca automaticamente em todas as categorias para que ele nunca fique sem encontrar a peça!
+      if (searchQuery && filtered.length === 0 && activeCategory !== 'all') {
+        const globalFallback = searchProductsSmart(
+          productsList,
+          searchQuery,
+          (p) => (!inStockOnly || p.inStock)
+        );
+        if (globalFallback.results.length > 0) {
+          filtered = globalFallback.results;
+          isApproximate = globalFallback.isApproximate;
+          searchedAllCategoriesFallback = true;
+        }
+      }
+
+      // Ordenação (quando em "default" e com busca ativa, mantém a ordenação por relevância da busca inteligente)
       if (sortBy === 'price-asc') {
         filtered.sort((a, b) => a.price - b.price);
       } else if (sortBy === 'price-desc') {
@@ -2569,6 +3394,27 @@
         filtered.sort((a, b) => a.desc.localeCompare(b.desc));
       } else if (sortBy === 'sku-asc') {
         filtered.sort((a, b) => a.code.localeCompare(b.code));
+      }
+
+      // Banner informativo da Busca Inteligente
+      const smartBanner = document.getElementById('smart-search-banner');
+      if (smartBanner) {
+        if (searchQuery && (isApproximate || searchedAllCategoriesFallback) && filtered.length > 0) {
+          const messages = [];
+          if (searchedAllCategoriesFallback) {
+            messages.push(`Não havia itens na categoria <strong>${escapeHtml(activeCategory)}</strong>, então exibimos os resultados de <strong>todas as categorias</strong>.`);
+          }
+          if (isApproximate) {
+            messages.push(`Exibindo peças com <strong>correspondência aproximada / inteligente</strong> para <em>"${escapeHtml(searchQuery)}"</em>.`);
+          }
+          smartBanner.innerHTML = `
+            <div>💡 ${messages.join(' ')}</div>
+            ${searchedAllCategoriesFallback ? `<button type="button" class="btn" style="background:#92400E; color:#fff; padding:4px 10px; font-size:0.75rem;" onclick="filterByCategory('all')">Manter em Todas as Categorias</button>` : ''}
+          `;
+          smartBanner.style.display = 'flex';
+        } else {
+          smartBanner.style.display = 'none';
+        }
       }
 
       // Atualiza Label
@@ -2704,6 +3550,10 @@
       displayedCount = PAGE_CHUNK;
       const searchInput = document.getElementById('global-search-input');
       if (searchInput) searchInput.value = '';
+      const clearBtn = document.getElementById('search-clear-btn');
+      if (clearBtn) clearBtn.style.display = 'none';
+      const dropdown = document.getElementById('search-suggestions-dropdown');
+      if (dropdown) dropdown.classList.remove('open');
       const stockCheck = document.getElementById('filter-stock-only');
       if (stockCheck) stockCheck.checked = false;
       const sortSelect = document.getElementById('filter-sort');
@@ -3097,13 +3947,10 @@
     }
 
     function renderAdminProductsTable() {
-      const q = (document.getElementById('admin-search-crud').value || '').toLowerCase();
+      const q = (document.getElementById('admin-search-crud').value || '').trim();
       const tbody = document.getElementById('admin-products-table-body');
       
-      const filtered = productsList.filter(p => {
-        if (!q) return true;
-        return `${p.desc} ${p.code} ${p.cat}`.toLowerCase().includes(q);
-      }).slice(0, 100);
+      const filtered = (q ? searchProductsSmart(productsList, q).results : productsList).slice(0, 100);
 
       tbody.innerHTML = filtered.map(p => `
         <tr>
