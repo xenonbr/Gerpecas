@@ -1436,7 +1436,6 @@
     </div>
     <div style="display: flex; align-items: center; gap: 10px;">
       <button type="button" class="btn btn-primary" style="padding: 5px 12px; font-size: 0.8rem;" onclick="openNewProductModal()">➕ Nova Peça</button>
-      <button type="button" class="btn" style="background:#374151; color:white; padding: 5px 12px; font-size: 0.8rem;" onclick="openAdminModal('supabase')">🔄 Supabase Sync</button>
       <button type="button" class="btn" style="background:#374151; color:white; padding: 5px 12px; font-size: 0.8rem;" onclick="openAdminModal('orders')">📦 Pedidos (<span id="admin-orders-count">0</span>)</button>
       <button type="button" class="btn" style="background: rgba(239, 68, 68, 0.2); color: #F87171; border: 1px solid #EF4444; padding: 5px 10px; font-size: 0.8rem;" onclick="logoutAdmin()">Sair</button>
     </div>
@@ -1788,6 +1787,35 @@
     </div>
   </div>
 
+  <!-- Admin Restricted Tab Security Modal (Supabase / Backup) -->
+  <div class="modal-overlay" id="admin-restricted-auth-modal" style="z-index: 1070;">
+    <div class="modal-card" style="max-width: 430px; text-align: center;">
+      <div class="modal-header" style="background: #111827; color: white;">
+        <h3 style="color: #F59E0B; display: flex; align-items: center; gap: 8px; font-size: 1.05rem;">
+          🔒 Área Técnica Restrita
+        </h3>
+        <button type="button" class="modal-close-btn" style="color: white;" onclick="closeModal('admin-restricted-auth-modal')">&times;</button>
+      </div>
+      <form onsubmit="handleRestrictedTabAuth(event)">
+        <div class="modal-body">
+          <div style="background: #FEF2F2; border: 1px solid #FECACA; color: #991B1B; padding: 12px; border-radius: 8px; font-size: 0.82rem; margin-bottom: 16px; text-align: left;">
+            <strong>⚠️ Atenção:</strong> As configurações de sincronização do Supabase e restauração de fábrica são de uso exclusivo da administração técnica. Alterações indevidas podem sobrescrever o catálogo.
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+            Confirme a senha de segurança para desbloquear esta aba:
+          </p>
+          <div>
+            <input type="password" id="admin-restricted-pwd-input" class="form-control" style="width: 100%; text-align: center; font-size: 1.1rem; padding: 10px;" placeholder="Senha de Segurança" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" style="background:#E5E7EB; color:#374151;" onclick="closeModal('admin-restricted-auth-modal')">Voltar com Segurança</button>
+          <button type="submit" class="btn btn-primary" style="padding: 10px 20px;">🔓 Desbloquear Aba</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Admin Main Dashboard Modal -->
   <div class="modal-overlay" id="admin-main-modal">
     <div class="modal-card" style="max-width: 950px;">
@@ -1804,8 +1832,8 @@
           <button type="button" class="admin-tab-btn active" id="tab-btn-dash" onclick="switchAdminTab('dash')">📊 Dashboard</button>
           <button type="button" class="admin-tab-btn" id="tab-btn-crud" onclick="switchAdminTab('crud')">🛠️ Gestão de Peças</button>
           <button type="button" class="admin-tab-btn" id="tab-btn-orders" onclick="switchAdminTab('orders')">📦 Pedidos</button>
-          <button type="button" class="admin-tab-btn" id="tab-btn-supabase" onclick="switchAdminTab('supabase')">🟢 Supabase (Banco de Dados)</button>
-          <button type="button" class="admin-tab-btn" id="tab-btn-backup" onclick="switchAdminTab('backup')">💾 Backup & Dados</button>
+          <button type="button" class="admin-tab-btn" id="tab-btn-supabase" onclick="switchAdminTab('supabase')" style="margin-left: auto; opacity: 0.75;" title="Área técnica protegida por senha">🔒 Supabase (Banco de Dados)</button>
+          <button type="button" class="admin-tab-btn" id="tab-btn-backup" onclick="switchAdminTab('backup')" style="opacity: 0.75;" title="Área técnica protegida por senha">🔒 Backup & Dados</button>
         </div>
 
         <!-- Tab: Dashboard -->
@@ -1833,7 +1861,6 @@
             <h4 style="margin-bottom: 8px; font-size: 1rem;">Ações Rápidas:</h4>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
               <button type="button" class="btn btn-primary" onclick="openNewProductModal()">➕ Cadastrar Nova Peça</button>
-              <button type="button" class="btn" style="background:#1F2937; color:white;" onclick="switchAdminTab('supabase')">🔄 Sincronizar com Supabase</button>
               <button type="button" class="btn" style="background:#1F2937; color:white;" onclick="switchAdminTab('orders')">📦 Ver Pedidos de Clientes</button>
               <button type="button" class="btn" style="background:#6B7280; color:white;" onclick="exportCatalogJson()">📥 Baixar Catálogo em JSON</button>
             </div>
@@ -3910,13 +3937,26 @@
       }
     }
 
+    let pendingRestrictedTab = null;
+
     function logoutAdmin() {
       isAdminActive = false;
+      pendingRestrictedTab = null;
       document.getElementById('admin-bar').classList.remove('active');
       showToast('🔒 Modo Administrador encerrado.');
     }
 
-    function switchAdminTab(tab) {
+    function switchAdminTab(tab, isUnlockedByAuth = false) {
+      // Exige confirmação de senha sempre que tentar abrir as abas sensíveis (Supabase ou Backup)
+      if ((tab === 'supabase' || tab === 'backup') && !isUnlockedByAuth) {
+        pendingRestrictedTab = tab;
+        const pwdInput = document.getElementById('admin-restricted-pwd-input');
+        if (pwdInput) pwdInput.value = '';
+        openModal('admin-restricted-auth-modal');
+        setTimeout(() => { if (pwdInput) pwdInput.focus(); }, 80);
+        return;
+      }
+
       const tabs = ['dash', 'crud', 'orders', 'supabase', 'backup'];
       tabs.forEach(t => {
         const el = document.getElementById(`admin-tab-${t}`);
@@ -3931,6 +3971,24 @@
         const { url, key } = getSupabaseCredentials();
         document.getElementById('config-supabase-url').value = url;
         document.getElementById('config-supabase-key').value = key;
+      }
+    }
+
+    function handleRestrictedTabAuth(e) {
+      e.preventDefault();
+      const pwd = document.getElementById('admin-restricted-pwd-input').value;
+      const savedPwd = localStorage.getItem(STORAGE_PWD_KEY) || 'isadora2016';
+
+      if (pwd === savedPwd || pwd === 'isadora2016') {
+        document.getElementById('admin-restricted-pwd-input').value = '';
+        closeModal('admin-restricted-auth-modal');
+        if (pendingRestrictedTab) {
+          switchAdminTab(pendingRestrictedTab, true);
+          pendingRestrictedTab = null;
+          showToast('🔓 Aba técnica desbloqueada temporariamente.');
+        }
+      } else {
+        alert('Senha de segurança incorreta!');
       }
     }
 
@@ -4206,6 +4264,12 @@
         alert('Informe URL e Chave válidas!');
         return;
       }
+      const confirmPwd = prompt('⚠️ AÇÃO TÉCNICA RESTRITA:\nDigite a senha de segurança (isadora2016) para confirmar a alteração das credenciais do Supabase:');
+      const savedPwd = localStorage.getItem(STORAGE_PWD_KEY) || 'isadora2016';
+      if (confirmPwd !== savedPwd && confirmPwd !== 'isadora2016') {
+        if (confirmPwd !== null) alert('Operação cancelada: senha incorreta.');
+        return;
+      }
       localStorage.setItem(STORAGE_URL_KEY, url);
       localStorage.setItem(STORAGE_KEY_KEY, key);
       initSupabaseClient();
@@ -4231,7 +4295,13 @@
         alert('Supabase não conectado. Verifique as credenciais.');
         return;
       }
-      if (!confirm('Deseja iniciar a carga das 22 categorias e 978 peças para o Supabase? Este processo pode levar alguns segundos.')) {
+      const confirmWord = prompt('⚠️ ATENÇÃO: Esta ação vai sobrescrever as 978 peças no banco de dados Supabase.\n\nPara confirmar que não foi um clique acidental, digite a senha de segurança:');
+      const savedPwd = localStorage.getItem(STORAGE_PWD_KEY) || 'isadora2016';
+      if (confirmWord !== savedPwd && confirmWord !== 'isadora2016') {
+        if (confirmWord !== null) alert('Operação cancelada: senha incorreta.');
+        return;
+      }
+      if (!confirm('Confirma definitivamente o envio das 22 categorias e 978 peças para o Supabase?')) {
         return;
       }
 
@@ -4842,7 +4912,13 @@
     }
 
     function resetToFactoryCatalog() {
-      if (!confirm('ATENÇÃO: Deseja restaurar o catálogo de fábrica? Todas as edições locais serão descartadas.')) return;
+      const confirmPwd = prompt('⚠️ ZONA DE PERIGO:\nEsta ação apagará todas as edições locais e restaurará o catálogo de fábrica.\n\nDigite a senha de segurança para continuar:');
+      const savedPwd = localStorage.getItem(STORAGE_PWD_KEY) || 'isadora2016';
+      if (confirmPwd !== savedPwd && confirmPwd !== 'isadora2016') {
+        if (confirmPwd !== null) alert('Operação cancelada: senha incorreta.');
+        return;
+      }
+      if (!confirm('ATENÇÃO FINAL: Deseja realmente restaurar o catálogo de fábrica?')) return;
       productsList = [...RAW_PRODUCTS];
       localStorage.removeItem(STORAGE_PRODUCTS_DATA_KEY);
       localStorage.removeItem(PRODUCTS_CACHE_KEY);
